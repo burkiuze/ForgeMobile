@@ -6,9 +6,9 @@ import { listFiles } from '../core/vfs';
 import { AgentEvent, Orchestrator } from './agent';
 import { Memory, bm25, extractFacts } from './memory';
 import { parseAmbientcg, parsePolyhaven, phDiffuseUrl } from './store';
-import { executeTool, isMutation, parseToolCalls, stripToolBlocks } from './tools';
+import { aimAt, executeTool, isMutation, parseToolCalls, stripToolBlocks } from './tools';
 import { parseDdg } from './web';
-import { SseParser } from './client';
+import { SseParser, dedupeTail, isLooping } from './client';
 
 describe('tool protocol', () => {
   it('parses tool blocks, json blocks and bare lines', () => {
@@ -170,5 +170,27 @@ describe('agent end-to-end', () => {
     expect(findEntity(scene, 'Tower')).toBeUndefined();
     expect(events.some((e) => e.type === 'tool' && e.status === 'rejected')).toBe(true);
     expect(await listFiles('agent-test')).toEqual([]);
+  });
+});
+
+describe('camera + loop guard', () => {
+  it('aims cameras at their target', async () => {
+    const scene = platformerScene();
+    const r = await executeTool({ scene, project: 'cam-test' }, { name: 'setup_camera', args: { style: 'third_person', target: 'Player' } });
+    expect(r.result).toContain('looking at Player');
+    const cam = scene.entities.find((e) => e.camera && e.active)!;
+    const p = findEntity(scene, 'Player')!.transform.position;
+    expect(cam.camera!.follow).toBe('Player');
+    expect(cam.transform.position[2]).toBeGreaterThan(p[2]); // behind (+Z), looking toward -Z
+    expect(cam.transform.rotation[0]).toBeLessThan(0); // tilted down
+    expect(Math.abs(cam.transform.rotation[1])).toBeLessThan(1);
+    expect(aimAt([0, 10, 0.01], [0, 0, 0])[0]).toBeLessThan(-80); // top-down looks straight down
+  });
+
+  it('detects and trims repeated lines', () => {
+    const t = 'Plan ok.\nLet us wait.\n\nLet us wait.\nLet us wait.\nLet us wait.\n';
+    expect(isLooping(t)).toBe(true);
+    expect(dedupeTail(t)).toBe('Plan ok.\nLet us wait.');
+    expect(isLooping('a\nb\nc\nd\n')).toBe(false);
   });
 });

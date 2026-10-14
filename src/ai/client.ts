@@ -42,6 +42,24 @@ function headers(ep: Endpoint): Record<string, string> {
   return h;
 }
 
+/** True when the reply ends with the same non-empty line repeated 4+ times. */
+export function isLooping(text: string): boolean {
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 4) return false;
+  const last = lines[lines.length - 1];
+  if (last.length < 6 || last.startsWith('```')) return false;
+  return lines.slice(-4).every((l) => l === last);
+}
+
+/** Keeps one copy of the repeated trailing line. */
+export function dedupeTail(text: string): string {
+  const lines = text.split('\n');
+  const last = lines.map((l) => l.trim()).filter(Boolean).pop() || '';
+  let i = lines.length;
+  while (i > 0 && (!lines[i - 1].trim() || lines[i - 1].trim() === last)) i--;
+  return [...lines.slice(0, i), last].join('\n');
+}
+
 /** OpenRouter "Auto" → our curated free list (with server-side fallthrough). */
 export function requestBody(ep: Endpoint, messages: Msg[], temperature: number): Record<string, unknown> {
   const body: Record<string, unknown> = { model: ep.model, messages, stream: true, temperature };
@@ -71,14 +89,21 @@ export async function streamChat(
   let providerError = '';
   let reasoning = '';
   const parser = new SseParser();
-  const res = await httpStream(
+  // Stop a model that got stuck repeating the same line ("Let's wait. Let's wait. …").
+  const local = new AbortController();
+  const relay = () => local.abort();
+  signal?.addEventListener('abort', relay);
+  let looped = false;
+  let res;
+  try {
+  res = await httpStream(
     {
       url: `${ep.base}/chat/completions`,
       method: 'POST',
       headers: headers(ep),
       body: JSON.stringify(requestBody(ep, messages, temperature)),
       timeoutMs: 180000,
-      signal,
+      signal: local.signal,
     },
     (chunk) =>
       parser.push(chunk, (data) => {
@@ -97,12 +122,23 @@ export async function streamChat(
         const r = v.choices?.[0]?.delta?.reasoning;
         if (typeof r === 'string') reasoning += r;
         const d = v.choices?.[0]?.delta?.content;
-        if (typeof d === 'string' && d) {
+        if (typeof d === 'string' && d && !looped) {
           text += d;
           onDelta(d);
+          if (d.includes('\n') && isLooping(text)) {
+            looped = true;
+            text = dedupeTail(text);
+            local.abort();
+          }
         }
       }),
   );
+  } catch (e) {
+    if (!looped || signal?.aborted) throw e;
+    res = { status: 200, errorBody: '' };
+  } finally {
+    signal?.removeEventListener('abort', relay);
+  }
   if (res.status >= 400) {
     let msg = res.errorBody || '';
     try {

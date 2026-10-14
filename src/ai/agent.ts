@@ -97,7 +97,7 @@ When you have enough information, answer WITHOUT tool blocks and cite sources as
 `;
 
 const ACTION_RE = /\b(yap|hazırla|hazirla|ekle|oluştur|olustur|kur|düzelt|duzelt|değiştir|degistir|koy|sil|make|build|create|add|fix|change|remove|generate|write|set up)/i;
-const INTENT_RE = /(yazayım|yapayım|ekleyeyim|kurayım|başlıyorum|basliyorum|başlayalım|ekleyeceğim|yapacağım|oluşturacağım|şimdi|let me|i'll|i will|now i|next,? i|going to)[^.!?]*[.!:…]?\s*$/i;
+const INTENT_RE = /(yazayım|yapayım|ekleyeyim|kurayım|başlıyorum|basliyorum|başlayalım|ekleyeceğim|yapacağım|oluşturacağım|şimdi|let me|i'll|i will|now i|next,? i|going to|let's wait|wait for|bekleyelim|bekliyorum)[^.!?]*[.!:…]?\s*$/i;
 const BROKEN_TOOL_RE = /<\|tool_call|\[\w+\(.*\)\]|"tool"\s*:|<tool_call>/;
 
 const BUILDER_GUIDE = `## How to work
@@ -109,10 +109,11 @@ You can build complete games from an empty scene, extend them, or fix one specif
    - Otherwise find real assets: asset_search {source:"polyhaven", kind:"models"} for 3D models, kind:"textures" or source:"ambientcg" for surfaces, then asset_import and place models with create_entity {mesh:"model", model: path} (real size is applied automatically).
    - If no suitable model exists (e.g. a specific character), use the closest real asset, a simple stand-in object clearly named "<Thing> (placeholder)", and tell the user they can import their own model (Assets › Import from device, glTF/GLB) — never build a figure out of spheres and cylinders.
    - Primitives are only for level geometry: ground, walls, platforms, ramps, triggers, pickups.
-4. Gameplay: give the player a rigidbody + controller script (set_script or ask_coder), add goals (collectibles, enemies, timers), a HUD via hud(), win/lose conditions, and a Main Camera that follows the player. On phones the joystick drives W/A/S/D and the jump button is SPACE.
-5. Feel: generate_sound for coins/jumps/hits and trigger them with play_sound in scripts; animator presets (bob, spin, pulse, hover, door…) or create_animation for life; materials, textures and lights for looks.
-6. Batch with create_many, give every entity a clear unique name, keep things on the ground (y = height/2).
-7. Finish with a short summary of what you built and how to play, plus anything the user should import or decide.
+4. Gameplay: give the player a rigidbody + controller script (set_script — write it yourself), add goals (collectibles, enemies, timers), a HUD via hud(), win/lose conditions, and a Main Camera that follows the player. On phones the joystick drives W/A/S/D and the jump button is SPACE.
+5. Camera & looks: ALWAYS finish with setup_camera {style:"third_person", target:"Player"} (top_down / side for those genres) — never place or rotate cameras by hand. Texture the ground, platforms and walls with apply_texture (e.g. grass ground, wood or stone platforms) and set a sky with set_environment.
+6. Feel: generate_sound for coins/jumps/hits and trigger them with play_sound in scripts; animator presets (bob, spin, pulse, hover, door…) or create_animation for life; materials, textures and lights for looks.
+7. Batch with create_many, give every entity a clear unique name, keep things on the ground (y = height/2).
+8. Finish with a short summary of what you built and how to play, plus anything the user should import or decide.
 
 ## Rules
 - If the user asks you to make, build, add, change or fix something: DO IT NOW with tool blocks in this same reply. Never ask which option they prefer, never just describe what you will do — pick sensible defaults yourself and act.
@@ -124,7 +125,7 @@ const EXPLORE_PROMPT =
   'You are the EXPLORE subagent of the Forge engine: a search specialist. Your role is EXCLUSIVELY to search and analyze ' +
   '(scene, project files, the web, memory). You MUST NOT modify anything. Return a concise report with the facts, names and links the caller needs.';
 
-const WORKER_TOOLS = new Set(['web_search', 'fetch_url', 'memory_search', 'remember', 'ask_coder', 'task', 'todo_write', 'asset_search', 'asset_import']);
+const WORKER_TOOLS = new Set(['web_search', 'fetch_url', 'memory_search', 'remember', 'ask_coder', 'task', 'todo_write', 'asset_search', 'asset_import', 'apply_texture']);
 
 const truncate = (s: string, n: number) => (s.length <= n ? s : s.slice(0, n) + '…');
 let toolSeq = 0;
@@ -238,8 +239,25 @@ export class Orchestrator {
           case 'task':
             result = await this.subagent(arg('agent'), arg('prompt'));
             break;
+          case 'apply_texture': {
+            const targets = (Array.isArray(a.targets) ? a.targets : [a.target]).map(String).filter((x) => x && x !== 'undefined');
+            if (!targets.length) throw new Error('give target or targets');
+            const query = arg('query') || 'ground';
+            let items = await assetSearch('ambientcg', 'textures', query, 6).catch(() => []);
+            if (!items.length) items = await assetSearch('polyhaven', 'textures', query, 6).catch(() => []);
+            if (!items.length) throw new Error(`no texture found for "${query}" — try a simpler word (grass, wood, stone, bricks, metal, sand, tiles)`);
+            const imp = await importAsset(this.job.project, items[0].source, 'textures', items[0].id);
+            await this.env.runTool({ name: 'list_files', args: { path: '' } }).catch(() => null);
+            const done: string[] = [];
+            for (const t of targets) {
+              const tiling = typeof a.tiling === 'number' ? a.tiling : 4;
+              await this.env.runTool({ name: 'update_entity', args: { target: t, color: '#ffffff', material: { texture: imp.path, tiling } } });
+              done.push(t);
+            }
+            result = `texture ${imp.path} (${items[0].name}) applied to ${done.join(', ')}`;
+            break;
+          }
           case 'asset_search': {
-            if (!this.job.web) webOff();
             const items = await assetSearch(parseSource(arg('source')), parseKind(arg('kind')), arg('query'), 12);
             result = items.length
               ? items.map((i) => `- id=${i.id} name="${i.name}" source=${sourceLabel(i.source)} kind=${i.kind} tags=${i.tags.join(',')}`).join('\n')
@@ -247,7 +265,6 @@ export class Orchestrator {
             break;
           }
           case 'asset_import': {
-            if (!this.job.web) webOff();
             const imp = await importAsset(this.job.project, parseSource(arg('source')), parseKind(arg('kind')), arg('id'));
             let extents: number[] | undefined;
             if (imp.kind === 'models') {
@@ -438,7 +455,7 @@ export class Orchestrator {
       const results = await this.runCalls(calls);
       msgs.push({ role: 'assistant', content: reply });
       const nudge = step + 2 >= max ? '\nYou are almost out of steps: finish now and summarize.' : '';
-      msgs.push({ role: 'user', content: `Tool results:\n${results}${nudge}` });
+      msgs.push({ role: 'user', content: `Tool results (all tools have finished — nothing runs in the background, so continue now):\n${results}${nudge}` });
     }
   }
 

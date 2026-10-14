@@ -1,6 +1,7 @@
 // Scene tools exposed to agents, the model-agnostic text tool-call protocol, and the executor.
 // Same tool names/arguments as desktop Forge (src/ai/tools.rs).
 
+import * as THREE from 'three';
 import * as anim from '../core/animation';
 import { defaultSeed, encodeWav, parsePreset, synth, wavDuration } from '../core/audio';
 import { checkScript } from '../core/rhai';
@@ -25,8 +26,8 @@ Available tools:
 - delete_entity {target}
 - duplicate_entity {target, count:int, offset:[x,y,z]} -> copies spaced by offset.
 - set_script {target, code} -> attach a Rhai script (or {target, file:"Scripts/x.rhai"}).
-- ask_coder {target, goal} -> delegate script writing to the Coder agent (it writes & attaches the script).
-- add_camera {name, position, rotation, fov, follow:"entity name"} (follow keeps the offset to the target during play).
+- setup_camera {style:"third_person|top_down|side|fixed", target:"Player", distance, height, fov} -> creates/aims the Main Camera correctly and makes it follow the target. ALWAYS use this for cameras (never guess camera rotations).
+- add_camera {name, position, fov, follow:"entity name"} -> manual camera; it is aimed at the follow target automatically.
 - generate_sound {preset:"coin|jump|laser|explosion|hit|powerup|click|blip", name} -> creates Audio/<name>.wav (CC0, generated on the device).
 - create_animation {name, preset?:"bob|spin|pulse|walk|swing|swing_alt|door|shake|flash|hover", length, loop, tracks:[{property:"position|rotation|scale|color", keys:[{t, v:[x,y,z]}]}], target?} -> Animations/<name>.anim.json (position/rotation are offsets, scale is a multiplier).
 - Components on create/update_entity: audio:{clip:"Audio/x.wav", volume, loop, play_on_start} · animator:{clip:"preset:spin" or "Animations/x.anim.json", speed, play_on_start} (false removes).
@@ -38,11 +39,11 @@ Available tools:
 - memory_search {query} -> relevant long-term memories (user preferences, past projects).
 - remember {fact} -> store a durable fact/preference for future sessions.
 - todo_write {todos:[{content, status:"pending|in_progress|completed"}]} -> keep a visible task list for multi-step work (update it as you go).
-- task {agent:"explore"|"coder", prompt} -> run a subagent (explore = read-only research; coder = writes scripts) and get its report.
 - list_files {path:"Scripts"} · read_file {path} · write_file {path, content} · delete_file {path} · grep {pattern} -> project files.
 - list_assets {} -> every asset already in the project (models, textures, audio, animations, scripts, prefabs).
 - inspect_asset {path} -> details of one asset: model size (extents) and triangle count, texture size, audio length, animation tracks.
 - asset_search {source:"polyhaven|ambientcg", kind:"textures|models", query} -> free CC0 assets (Poly Haven has textures + 3D models, ambientCG has PBR materials).
+- apply_texture {target:"name" or targets:["a","b"], query:"grass|wood|bricks|stone|metal|sand|tiles…", tiling} -> finds a free CC0 texture, imports it and puts it on the objects in ONE step. Use it for ground, platforms, walls.
 - asset_import {source, kind, id} -> downloads into the project; returns {path, extents}. Then use the texture with update_entity {material:{texture: path}} (set color "#ffffff"), or place a model with create_entity {mesh:"model", model: path} (its real size is applied automatically).
 
 World: +Y is up, +X is right, -Z is forward (away from the default camera). Units ≈ meters. A unit cube is 1×1×1 centered on its position, so a cube resting on the ground at y=0 has position.y = scale.y/2. Planes are 1×1 (scale them, e.g. [30,1,30]).
@@ -60,7 +61,8 @@ Write one fenced block per call, then STOP and wait for results:
 - update_entity {target, ...fields}   - delete_entity {target}
 - set_script {target, code}  (Rhai: fn update(dt) { this.ry += 90.0 * dt; }  key("SPACE"), hud("text"), play_sound(path))
 - generate_sound {preset:"coin|jump|laser|explosion|hit|powerup|click|blip", name}
-- add_camera {name, position, follow}   - set_environment {sky_top, sky_bottom, ambient}
+- setup_camera {style:"third_person|top_down|side", target}   - set_environment {sky_top, sky_bottom, ambient}
+- apply_texture {targets:["Ground"], query:"grass", tiling}
 +Y is up, units are meters, a cube on the ground has y = height/2. When done, answer briefly with NO tool blocks.
 `;
 
@@ -199,6 +201,19 @@ export interface ToolOutcome {
   select?: EntityId;
   /** Project files changed (asset browser refresh). */
   files?: boolean;
+}
+
+/** Euler angles (degrees, XYZ like the renderer) that point a camera at `to`. */
+export function aimAt(from: Vec3, to: Vec3): Vec3 {
+  const o = new THREE.Object3D();
+  o.position.set(...from);
+  // Object3D.lookAt points +Z at the target; cameras look down -Z, so aim a camera instead.
+  const c = new THREE.PerspectiveCamera();
+  c.position.copy(o.position);
+  c.lookAt(new THREE.Vector3(...to));
+  c.rotation.reorder('XYZ');
+  const r = 180 / Math.PI;
+  return [c.rotation.x * r, c.rotation.y * r, c.rotation.z * r].map((v) => Math.round(v * 100) / 100) as Vec3;
 }
 
 function vec3(v: any): Vec3 | null {
@@ -443,6 +458,24 @@ export async function executeTool(ctx: ExecContext, call: ToolCall): Promise<Too
       e.script = code;
       return ok(`script attached to '${e.name}'`);
     }
+    case 'setup_camera': {
+      const style = (arg('style') || 'third_person').toLowerCase();
+      const tgtName = arg('target') || arg('follow');
+      const tgt = tgtName ? findEntity(scene, tgtName) : scene.entities.find((x) => /player/i.test(x.name));
+      const dist = num(a.distance) ?? (style.startsWith('top') ? 14 : style.startsWith('side') ? 12 : 8);
+      const h = num(a.height) ?? (style.startsWith('top') ? dist : style.startsWith('side') ? 3 : 4);
+      const base: Vec3 = tgt ? [...tgt.transform.position] as Vec3 : [0, 0, 0];
+      const off: Vec3 = style.startsWith('top') ? [0, h, 0.01] : style.startsWith('side') ? [0, h, dist] : style.startsWith('fixed') ? [dist * 0.7, h + 2, dist * 0.7] : [0, h, dist];
+      let e = scene.entities.find((x) => x.camera && x.active) || findEntity(scene, 'Main Camera');
+      if (!e) e = spawn(scene, 'Main Camera', 'none');
+      for (const x of scene.entities) if (x.camera && x !== e) x.active = false;
+      e.transform.position = [base[0] + off[0], base[1] + off[1], base[2] + off[2]];
+      e.transform.rotation = aimAt(e.transform.position, [base[0], base[1] + (style.startsWith('top') ? 0 : 1), base[2]]);
+      e.camera = { ...(e.camera ?? defaultCamera()), follow: tgt && !style.startsWith('fixed') ? tgt.name : '' };
+      if (num(a.fov) != null) e.camera.fov = a.fov;
+      e.active = true;
+      return ok(`camera '${e.name}' (${style}) at ${e.transform.position.map((v) => v.toFixed(1)).join(', ')} looking at ${tgt ? tgt.name : 'origin'}${e.camera.follow ? ', follows it in play' : ''}`);
+    }
     case 'add_camera': {
       const name = arg('name') || 'Main Camera';
       let e = findEntity(scene, name);
@@ -456,6 +489,11 @@ export async function executeTool(ctx: ExecContext, call: ToolCall): Promise<Too
       if (typeof a.follow === 'string') cam.follow = a.follow;
       e.camera = cam;
       e.active = true;
+      const ft = cam.follow ? findEntity(scene, cam.follow) : undefined;
+      if (ft && a.keep_rotation !== true) {
+        const q = ft.transform.position;
+        e.transform.rotation = aimAt(e.transform.position, [q[0], q[1] + 1, q[2]]);
+      }
       return ok(`camera '${e.name}' ready`);
     }
     case 'set_environment': {

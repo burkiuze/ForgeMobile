@@ -1,4 +1,4 @@
-import { Code2, Copy, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
+import { Code2, Copy, ImagePlus, Pencil, Play, Plus, Trash2, X } from 'lucide-react';
 import React, { useState } from 'react';
 import * as anim from '../../core/animation';
 import { audio } from '../../core/audio';
@@ -8,7 +8,8 @@ import {
 import { readBlob } from '../../core/vfs';
 import { useT } from '../../i18n';
 import { useEditor } from '../../state/editor';
-import { ColorField, Confirm, Empty, NumField, Row, Section, Segmented, Select, Sheet, Slider, Toggle, Vec3Field, haptic } from '../common/ui';
+import { ColorField, Confirm, Empty, NumField, Row, Section, Segmented, Select, Sheet, Slider, Toggle, Vec3Field, haptic, pickFiles, toast } from '../common/ui';
+import { importFiles } from './assets/actions';
 import { useFiles } from './useFiles';
 
 export function Inspector() {
@@ -85,12 +86,32 @@ export function Inspector() {
               <ColorField value={e.color} onChange={(c) => up((x) => void (x.color = c))} />
             </Row>
             <Row label={t('Texture', 'Doku')}>
-              <Select
-                className="w-48"
-                value={e.material.texture}
-                options={[{ v: '', label: t('None', 'Yok') }, ...textures.map((f) => ({ v: f.path, label: f.path.replace(/^Textures\//, '') }))]}
-                onChange={(v) => up((x) => void ((x.material.texture = v), v && (x.color = [1, 1, 1])))}
-              />
+              <div className="flex items-center gap-1.5">
+                <Select
+                  className="w-40"
+                  value={e.material.texture}
+                  options={[{ v: '', label: t('None', 'Yok') }, ...textures.map((f) => ({ v: f.path, label: f.path.replace(/^Textures\//, '') }))]}
+                  onChange={(v) => up((x) => void ((x.material.texture = v), v && (x.color = [1, 1, 1])))}
+                />
+                <button
+                  className="icon-btn w-10 h-10 bg-s2 shrink-0"
+                  aria-label="upload texture"
+                  onClick={async () => {
+                    const [f] = await pickFiles('image/*', false);
+                    if (!f) return;
+                    try {
+                      const name = /\.(png|jpe?g|webp)$/i.test(f.name) ? f.name : `${f.name || 'texture'}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}`;
+                      const [path] = await importFiles([new File([f], name, { type: f.type })]);
+                      up((x) => void ((x.material.texture = path), (x.color = [1, 1, 1]), x.material.tiling < 1 && (x.material.tiling = 1)));
+                      toast(t('Texture applied', 'Doku uygulandı'), 'ok');
+                    } catch (err) {
+                      toast((err as Error).message, 'err');
+                    }
+                  }}
+                >
+                  <ImagePlus className="w-4 h-4" />
+                </button>
+              </div>
             </Row>
             {e.material.texture && (
               <Row label={t('Tiling', 'Döşeme')}>
