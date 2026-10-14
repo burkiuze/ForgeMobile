@@ -27,6 +27,14 @@ export const SetupWizard: React.FC = () => {
   const [projectName, setProjectName] = useState('My First Platformer');
   const [selectedTemplate, setSelectedTemplate] = useState<'platformer' | 'starter3d' | 'empty'>('platformer');
 
+  // Username & Password Auth state
+  const [authTab, setAuthTab] = useState<'login' | 'register'>('register');
+  const [authUsername, setAuthUsername] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
+  const [authError, setAuthError] = useState<string | null>(null);
+
   const handleImportEnv = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -106,57 +114,190 @@ export const SetupWizard: React.FC = () => {
           </div>
         )}
 
-        {/* Step 2: Welcome & Google Account */}
+        {/* Step 2: Welcome & Account (Username/Password or Google) */}
         {step === 2 && (
-          <div className="space-y-5 text-center animate-in fade-in">
-            <ForgeLogo size="lg" />
+          <div className="space-y-4 text-center animate-in fade-in">
+            <ForgeLogo size="md" />
             <div>
-              <h2 className="text-xl font-black text-forge-bone tracking-wide">
-                {t('Welcome to Forge Mobile', "Forge Mobile'a Hoş Geldiniz")}
+              <h2 className="text-lg font-black text-forge-bone tracking-wide">
+                {t('Create Your Creator Account', 'Yaratıcı Hesabınızı Oluşturun')}
               </h2>
-              <p className="text-xs text-forge-boneMuted mt-1 max-w-xs mx-auto leading-relaxed">
+              <p className="text-xs text-forge-boneMuted mt-0.5 max-w-xs mx-auto leading-relaxed">
                 {t(
-                  'The mobile companion of Forge. Design, simulate, code and co-create 3D games with an AI-native engine.',
-                  'Forge mobil editörü. Yapay zeka destekli motorla 3D oyunlar tasarlayın, kodlayın ve yönetin.'
+                  'Sign in with username & password or continue with Google',
+                  'Kullanıcı adı ve şifre ile giriş yapın veya Google ile devam edin'
                 )}
               </p>
             </div>
 
-            {/* Google Sign-in Card */}
-            <div className="bg-forge-panel border border-forge-panelBorder rounded-2xl p-4 text-left max-w-xs mx-auto shadow-sm space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-forge-bone uppercase tracking-wider">
-                  {t('Creator Account', 'Yaratıcı Hesabı')}
-                </span>
-                <span className="text-[10px] text-forge-gold bg-forge-panelElevated px-2 py-0.5 rounded font-mono">
-                  Cloud Sync
-                </span>
-              </div>
-
+            {/* Account Card */}
+            <div className="bg-forge-panel border border-forge-panelBorder rounded-2xl p-4 text-left max-w-sm mx-auto shadow-sm space-y-3">
               {currentUser ? (
-                <div className="flex items-center space-x-2.5 pt-1">
-                  <div className="w-8 h-8 rounded-full bg-forge-orange text-white font-bold flex items-center justify-center text-xs">
-                    {currentUser.displayName.charAt(0)}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-forge-bone uppercase tracking-wider">
+                      {t('Active Account', 'Aktif Hesap')}
+                    </span>
+                    <span className="text-[10px] text-forge-success font-bold bg-green-500/10 px-2 py-0.5 rounded">
+                      Giriş Yapıldı
+                    </span>
                   </div>
-                  <div className="truncate">
-                    <span className="text-xs font-bold text-forge-bone block truncate">{currentUser.displayName}</span>
-                    <span className="text-[10px] text-forge-boneMuted truncate block">{currentUser.email}</span>
+
+                  <div className="flex items-center space-x-2.5 pt-1">
+                    <div className="w-8 h-8 rounded-full bg-forge-orange text-white font-bold flex items-center justify-center text-xs">
+                      {currentUser.displayName.charAt(0)}
+                    </div>
+                    <div className="truncate flex-1">
+                      <span className="text-xs font-bold text-forge-bone block truncate">{currentUser.displayName}</span>
+                      <span className="text-[10px] text-forge-boneMuted truncate block">{currentUser.email}</span>
+                    </div>
+                    <button
+                      onClick={() => setCurrentUser(null)}
+                      className="text-xs text-forge-danger hover:underline"
+                    >
+                      {t('Switch', 'Değiştir')}
+                    </button>
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => {
-                    setCurrentUser({
-                      uid: 'google_user_forge',
-                      displayName: 'Burak Forge Creator',
-                      email: 'haktanburak0658@gmail.com',
-                    });
-                  }}
-                  className="w-full min-h-[44px] rounded-xl bg-forge-orange text-white text-xs font-bold flex items-center justify-center space-x-2 active:scale-95 shadow-md"
-                >
-                  <span className="font-black text-sm">G</span>
-                  <span>{t('Sign in with Google', 'Google ile Giriş Yap')}</span>
-                </button>
+                <div className="space-y-3">
+                  {/* Tabs: Giriş Yap / Kayıt Ol */}
+                  <div className="flex bg-forge-panelElevated p-1 rounded-xl">
+                    <button
+                      onClick={() => { setAuthTab('login'); setAuthError(null); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        authTab === 'login' ? 'bg-forge-orange text-white' : 'text-forge-boneMuted'
+                      }`}
+                    >
+                      {t('Sign In', 'Giriş Yap')}
+                    </button>
+                    <button
+                      onClick={() => { setAuthTab('register'); setAuthError(null); }}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                        authTab === 'register' ? 'bg-forge-orange text-white' : 'text-forge-boneMuted'
+                      }`}
+                    >
+                      {t('Sign Up', 'Kayıt Ol')}
+                    </button>
+                  </div>
+
+                  {authTab === 'login' ? (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder={t('Username or Email', 'Kullanıcı Adı veya E-posta')}
+                        value={authUsername}
+                        onChange={(e) => setAuthUsername(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <input
+                        type="password"
+                        placeholder={t('Password', 'Şifre')}
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!authUsername.trim() || !authPassword.trim()) {
+                            setAuthError(t('Please fill in username and password', 'Kullanıcı adı ve şifre giriniz'));
+                            return;
+                          }
+                          setCurrentUser({
+                            uid: `user_${Date.now()}`,
+                            displayName: authUsername.trim(),
+                            email: authUsername.includes('@') ? authUsername.trim() : `${authUsername.trim()}@forge.dev`,
+                          });
+                        }}
+                        className="w-full min-h-[42px] rounded-xl bg-forge-orange text-white text-xs font-bold active:scale-95 shadow-md"
+                      >
+                        {t('Sign In', 'Giriş Yap')}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        placeholder={t('Username', 'Kullanıcı Adı')}
+                        value={authUsername}
+                        onChange={(e) => setAuthUsername(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <input
+                        type="email"
+                        placeholder={t('Email Address', 'E-posta Adresi')}
+                        value={authEmail}
+                        onChange={(e) => setAuthEmail(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <input
+                        type="password"
+                        placeholder={t('Password (min 6 chars)', 'Şifre (en az 6 karakter)')}
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <input
+                        type="password"
+                        placeholder={t('Confirm Password', 'Şifre Tekrar')}
+                        value={authConfirmPassword}
+                        onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                        className="w-full bg-forge-bg border border-forge-borderSubtle rounded-xl px-3 py-2 text-xs text-forge-bone placeholder-forge-boneMuted focus:outline-none focus:border-forge-orange"
+                      />
+                      <button
+                        onClick={() => {
+                          if (!authUsername.trim() || !authPassword.trim()) {
+                            setAuthError(t('Please fill in required fields', 'Lütfen gerekli alanları doldurunuz'));
+                            return;
+                          }
+                          if (authPassword.length < 6) {
+                            setAuthError(t('Password must be at least 6 characters', 'Şifre en az 6 karakter olmalıdır'));
+                            return;
+                          }
+                          if (authPassword !== authConfirmPassword) {
+                            setAuthError(t('Passwords do not match', 'Şifreler eşleşmiyor'));
+                            return;
+                          }
+                          setCurrentUser({
+                            uid: `user_${Date.now()}`,
+                            displayName: authUsername.trim(),
+                            email: authEmail.trim() || `${authUsername.trim()}@forge.dev`,
+                          });
+                        }}
+                        className="w-full min-h-[42px] rounded-xl bg-forge-orange text-white text-xs font-bold active:scale-95 shadow-md"
+                      >
+                        {t('Register & Continue', 'Kayıt Ol ve Devam Et')}
+                      </button>
+                    </div>
+                  )}
+
+                  {authError && (
+                    <p className="text-[11px] text-forge-danger text-center">{authError}</p>
+                  )}
+
+                  {/* OR Google Sign-In */}
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-forge-borderSubtle"></div>
+                    <span className="flex-shrink mx-2 text-[10px] text-forge-boneMuted/70 uppercase">
+                      {t('OR', 'VEYA')}
+                    </span>
+                    <div className="flex-grow border-t border-forge-borderSubtle"></div>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setCurrentUser({
+                        uid: 'google_user_forge',
+                        displayName: 'Burak Forge Creator',
+                        email: 'haktanburak0658@gmail.com',
+                      });
+                    }}
+                    className="w-full min-h-[40px] rounded-xl bg-forge-panelElevated border border-forge-borderSubtle hover:border-forge-orange text-forge-bone text-xs font-semibold flex items-center justify-center space-x-2 active:scale-95"
+                  >
+                    <span className="font-bold text-forge-gold">G</span>
+                    <span>{t('Continue with Google', 'Google ile Devam Et')}</span>
+                  </button>
+                </div>
               )}
             </div>
           </div>
