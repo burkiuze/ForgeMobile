@@ -1,39 +1,36 @@
-// Model registry: OpenRouter cloud models + models served on the local network
-// (llama.cpp llama-server, Ollama, LM Studio… anything OpenAI-compatible).
+// Model ids and endpoint resolution across providers.
+// `vendor/model[:free]` → OpenRouter · `<provider>:<model>` → that provider ·
+// `lan:<model>` → OpenAI-compatible server on the local network · `device:<catalog id>` → on the phone.
 
-export const AUTO_ID = 'openrouter/free';
+import { findMobileModel } from './mobileModels';
+import { FORGE_PROXY, ProviderId, provider, splitModelId } from './providers';
+
+export { AUTO_ID } from './providers';
 export const OPENROUTER_BASE = 'https://openrouter.ai/api/v1';
 
-export interface ModelInfo {
-  id: string;
-  name: string;
-  blurb: string;
-  blurbTr: string;
-}
-
-export const CLOUD_MODELS: ModelInfo[] = [
-  { id: AUTO_ID, name: 'Auto', blurb: 'Best available free model, picked automatically', blurbTr: 'En iyi ücretsiz model otomatik seçilir' },
-  { id: 'google/gemma-4-31b-it:free', name: 'Gemma 4 31B', blurb: 'Google DeepMind · 262K ctx · multimodal, tool use', blurbTr: 'Google DeepMind · 262K bağlam · çok kipli, araç kullanımı' },
-  { id: 'inception/mercury-decide:free', name: 'Mercury Decide', blurb: 'Inception · structured decisions', blurbTr: 'Inception · yapılandırılmış kararlar' },
-  { id: 'cohere/north-mini-code:free', name: 'North Mini Code', blurb: 'Cohere · agentic coding MoE · 256K ctx', blurbTr: 'Cohere · ajan kodlama MoE · 256K bağlam' },
-  { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small', blurb: 'Thinking Machines · MoE · 1.05M ctx', blurbTr: 'Thinking Machines · MoE · 1.05M bağlam' },
-];
-
-export type Backend = 'openrouter' | 'lan';
-
 export interface Endpoint {
-  backend: Backend;
+  provider: ProviderId;
   base: string;
   key: string;
   model: string;
+  /** Goes through the built-in Forge AI proxy (no key). */
+  viaProxy?: boolean;
 }
 
-/** `vendor/model[:free]` → OpenRouter, `lan:<model>` → OpenAI-compatible server on the LAN. */
-export function resolve(id: string, lanUrl: string, openrouterKey: string): Endpoint {
-  if (id.startsWith('lan:')) {
-    return { backend: 'lan', base: normalizeLanUrl(lanUrl), key: '', model: id.slice(4) };
-  }
-  return { backend: 'openrouter', base: OPENROUTER_BASE, key: openrouterKey, model: id };
+export interface ResolveOptions {
+  lanUrl: string;
+  customUrl: string;
+  key: (name: string) => string;
+}
+
+export function resolve(id: string, o: ResolveOptions): Endpoint {
+  const { provider: p, model } = splitModelId(id);
+  const prov = provider(p);
+  const key = prov.key ? o.key(prov.key) : '';
+  if (p === 'lan') return { provider: p, base: normalizeLanUrl(o.lanUrl), key: '', model };
+  if (prov.builtIn && !key.trim()) return { provider: p, base: FORGE_PROXY, key: '', model, viaProxy: true };
+  if (p === 'custom') return { provider: p, base: o.customUrl.trim().replace(/\/+$/, ''), key, model };
+  return { provider: p, base: prov.base, key, model };
 }
 
 /** "192.168.1.5:11434" → "http://192.168.1.5:11434/v1" */
@@ -46,9 +43,17 @@ export function normalizeLanUrl(u: string): string {
 }
 
 export function displayName(id: string): string {
-  const m = CLOUD_MODELS.find((m) => m.id === id);
-  if (m) return m.name;
-  if (id.startsWith('lan:')) return `💻 ${id.slice(4)}`;
-  const tail = id.split('/').pop() || id;
+  const { provider: p, model } = splitModelId(id);
+  if (p === 'device') {
+    const m = findMobileModel(model);
+    return m ? `📱 ${m.name} ${m.quant}` : `📱 ${model}`;
+  }
+  if (p === 'lan') return `💻 ${model}`;
+  const known = provider(p).models.find((m) => m.id === model);
+  if (known) return known.name;
+  const tail = model.split('/').pop() || model;
   return tail.replace(/:free$/, '');
 }
+
+/** Kept for older imports. */
+export const CLOUD_MODELS = provider('openrouter').models.map((m) => ({ id: m.id, name: m.name, blurb: m.blurb || '', blurbTr: m.blurbTr || '' }));

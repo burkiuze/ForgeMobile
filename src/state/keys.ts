@@ -2,10 +2,11 @@
 // Sources: paste, a `.env` file from the device, or the user's private Forge.env GitHub repo.
 
 import { create } from 'zustand';
+import { ALL_KEY_NAMES } from '../ai/providers';
 import { http, secretStore } from '../platform/native';
 
-export const KEY_NAMES = ['OPENROUTER_API_KEY', 'HF_TOKEN', 'GITHUB_TOKEN'] as const;
-export type KeyName = (typeof KEY_NAMES)[number];
+export const KEY_NAMES: string[] = ALL_KEY_NAMES;
+export type KeyName = string;
 
 interface KeysStore {
   values: Record<KeyName, string>;
@@ -88,6 +89,6 @@ export async function syncForgeEnv(repo: string, path: string, token: string): P
   const text = await fetchForgeEnv(repo, path, token);
   const got = importEnv(text).filter((k) => k !== 'GITHUB_TOKEN');
   useKeys.getState().set('GITHUB_TOKEN', token);
-  if (!got.length) throw new Error('no OPENROUTER_API_KEY / HF_TOKEN found in that .env');
+  if (!got.length) throw new Error('no API keys (OPENROUTER_API_KEY, ANTHROPIC_API_KEY…) found in that .env');
   return got;
 }

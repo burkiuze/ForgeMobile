@@ -76,7 +76,17 @@ public class MainActivity extends Activity {
                         u = Uri.parse(ORIGIN + "/www" + path);
                     }
                 }
-                return loader.shouldInterceptRequest(u);
+                WebResourceResponse r = loader.shouldInterceptRequest(u);
+                if (r != null) {
+                    // Cross-origin isolation lets the on-device model runtime use threads.
+                    java.util.Map<String, String> h = new java.util.HashMap<>();
+                    if (r.getResponseHeaders() != null) h.putAll(r.getResponseHeaders());
+                    h.put("Cross-Origin-Opener-Policy", "same-origin");
+                    h.put("Cross-Origin-Embedder-Policy", "credentialless");
+                    h.put("Cache-Control", "no-cache");
+                    r.setResponseHeaders(h);
+                }
+                return r;
             }
 
             @Override

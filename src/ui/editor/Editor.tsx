@@ -79,7 +79,7 @@ export function Editor() {
             </button>
           )}
         </div>
-        {wide && !playing && <div className="w-[24rem] border-l border-line/70 bg-bg flex flex-col">{panel(sideTab)}</div>}
+        {wide && !playing && <div className="w-[24rem] shrink-0 min-h-0 border-l border-line/70 bg-bg flex flex-col">{panel(sideTab)}</div>}
       </div>
       {!playing && <TabBar tab={wide ? sideTab : effTab} wide={wide} />}
 
@@ -89,6 +89,7 @@ export function Editor() {
       <AnimationEditor open={sheet === 'animation'} onClose={() => openSheet(null)} />
       <SettingsSheet open={sheet === 'settings'} onClose={() => openSheet(null)} />
       <SettingsSheet open={sheet === 'models'} onClose={() => openSheet(null)} initial="models" />
+      <SettingsSheet open={sheet === 'device'} onClose={() => openSheet(null)} initial="device" />
     </div>
   );
 }

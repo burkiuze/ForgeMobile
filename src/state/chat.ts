@@ -178,13 +178,13 @@ export const useChat = create<ChatStore>((set, get) => ({
         selected: sel ? `${sel.name} (id ${sel.id})` : undefined,
         web: get().web,
         sessionId: get().sessionId,
-        openrouterKey: getKey('OPENROUTER_API_KEY'),
+        key: getKey,
         project: ed.project?.id || 'scratch',
         memory: new Memory(s.memory),
         settings: {
           selectedModel: s.selectedModel, plannerModel: s.plannerModel, builderModel: s.builderModel, reviewerModel: s.reviewerModel,
           coderModel: s.coderModel, exploreModel: s.exploreModel, temperature: s.temperature, maxSteps: s.maxSteps,
-          usePlanner: s.usePlanner, useReviewer: s.useReviewer, lanUrl: s.lanUrl, webResults: s.webResults,
+          usePlanner: s.usePlanner, useReviewer: s.useReviewer, lanUrl: s.lanUrl, customUrl: s.customUrl, webResults: s.webResults,
         },
       },
       {

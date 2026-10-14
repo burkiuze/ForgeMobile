@@ -12,7 +12,7 @@ import { Msg, streamChat } from './client';
 import { Memory } from './memory';
 import { AUTO_ID, displayName, resolve } from './models';
 import { search as assetSearch, importAsset, parseKind, parseSource, sourceLabel } from './store';
-import { READ_ONLY_TOOLS, SCRIPT_DOCS, TOOL_DOCS, ToolCall, ToolOutcome, isMutation, parseToolCalls, stripToolBlocks } from './tools';
+import { COMPACT_TOOL_DOCS, READ_ONLY_TOOLS, SCRIPT_DOCS, TOOL_DOCS, ToolCall, ToolOutcome, isMutation, parseToolCalls, stripToolBlocks } from './tools';
 import { SearchHit, fetchText, search as webSearch } from './web';
 
 export type Role = 'explore' | 'assistant' | 'planner' | 'builder' | 'coder' | 'reviewer';
@@ -43,6 +43,7 @@ export interface AgentSettings {
   usePlanner: boolean;
   useReviewer: boolean;
   lanUrl: string;
+  customUrl: string;
   webResults: number;
 }
 
@@ -55,7 +56,8 @@ export interface Job {
   selected?: string;
   web: boolean;
   sessionId: string;
-  openrouterKey: string;
+  /** Reads an API key by name (OPENROUTER_API_KEY, ANTHROPIC_API_KEY…). */
+  key: (name: string) => string;
   settings: AgentSettings;
   memory: Memory;
   project: string;
@@ -134,6 +136,15 @@ export class Orchestrator {
     return o?.trim() ? o : s.selectedModel;
   }
 
+  private endpoint(role: Role) {
+    return resolve(this.modelFor(role), { lanUrl: this.job.settings.lanUrl, customUrl: this.job.settings.customUrl, key: this.job.key });
+  }
+
+  /** Small on-device models get short prompts and skip the planner/reviewer round-trips. */
+  private get small() {
+    return this.endpoint('builder').provider === 'device';
+  }
+
   private check() {
     if (this.env.signal.aborted) throw new Error('Cancelled');
   }
@@ -141,7 +152,7 @@ export class Orchestrator {
   /** One streamed LLM turn; falls back to Auto once if the chosen cloud model fails. */
   private async call(role: Role, messages: Msg[]): Promise<string> {
     this.check();
-    const ep = resolve(this.modelFor(role), this.job.settings.lanUrl, this.job.openrouterKey);
+    const ep = this.endpoint(role);
     this.env.emit({ type: 'start', role, model: displayName(ep.model) });
     const emit = (d: string) => this.env.emit({ type: 'delta', text: d });
     const t = this.job.settings.temperature;
@@ -150,7 +161,7 @@ export class Orchestrator {
       r = await streamChat(ep, messages, t, this.env.signal, emit);
     } catch (e) {
       const msg = (e as Error).message;
-      if (this.env.signal.aborted || ep.model === AUTO_ID || ep.backend !== 'openrouter' || /key missing/.test(msg)) {
+      if (this.env.signal.aborted || ep.model === AUTO_ID || ep.provider !== 'openrouter' || /key missing/.test(msg)) {
         this.env.emit({ type: 'end', model: '' });
         throw e;
       }
@@ -333,7 +344,7 @@ export class Orchestrator {
 
   private async buildFlow() {
     let plan: string | null = null;
-    if (this.job.mode === 'planning' && this.job.settings.usePlanner) {
+    if (this.job.mode === 'planning' && this.job.settings.usePlanner && !this.small) {
       plan = await this.call('planner', [
         {
           role: 'system',
@@ -342,7 +353,7 @@ export class Orchestrator {
         { role: 'user', content: this.job.prompt },
       ]);
     }
-    const review = this.job.mode === 'planning' && this.job.settings.useReviewer;
+    const review = this.job.mode === 'planning' && this.job.settings.useReviewer && !this.small;
     const rounds = review ? 2 : 1;
     let feedback: string | null = null;
     for (let round = 0; round < rounds; round++) {
@@ -362,7 +373,12 @@ export class Orchestrator {
 
   private async ask() {
     const msgs: Msg[] = [
-      { role: 'system', content: `${PERSONA}\nYou can explain Forge features, game design, and Rhai scripting.\n${SCRIPT_DOCS}\n${ASK_TOOLS}\n${this.contextBlock()}` },
+      {
+        role: 'system',
+        content: this.small
+          ? `${PERSONA}\nYou can explain Forge features, game design, and Rhai scripting.\n${this.contextBlock()}`
+          : `${PERSONA}\nYou can explain Forge features, game design, and Rhai scripting.\n${SCRIPT_DOCS}\n${ASK_TOOLS}\n${this.contextBlock()}`,
+      },
       ...this.history,
       { role: 'user', content: this.job.prompt },
     ];
@@ -377,7 +393,12 @@ export class Orchestrator {
 
   private async build(plan: string | null, feedback: string | null) {
     const msgs: Msg[] = [
-      { role: 'system', content: `${PERSONA}\nYou are the BUILDER agent. You edit the open scene ONLY through tools.\n${TOOL_DOCS}\n${SCRIPT_DOCS}\n${BUILDER_GUIDE}\n${this.contextBlock()}` },
+      {
+        role: 'system',
+        content: this.small
+          ? `${PERSONA}\nYou are the BUILDER agent. You edit the open scene ONLY through tools.\n${COMPACT_TOOL_DOCS}\n${this.contextBlock()}`
+          : `${PERSONA}\nYou are the BUILDER agent. You edit the open scene ONLY through tools.\n${TOOL_DOCS}\n${SCRIPT_DOCS}\n${BUILDER_GUIDE}\n${this.contextBlock()}`,
+      },
       ...this.history,
     ];
     let task = `User request: ${this.job.prompt}`;

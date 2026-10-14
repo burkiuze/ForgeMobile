@@ -48,6 +48,22 @@ Available tools:
 World: +Y is up, +X is right, -Z is forward (away from the default camera). Units ≈ meters. A unit cube is 1×1×1 centered on its position, so a cube resting on the ground at y=0 has position.y = scale.y/2. Planes are 1×1 (scale them, e.g. [30,1,30]).
 `;
 
+/** Short tool sheet for small on-device models (their context and speed are limited). */
+export const COMPACT_TOOL_DOCS = `## Tools
+Write one fenced block per call, then STOP and wait for results:
+\`\`\`tool
+{"tool": "create_entity", "args": {"name": "Wall", "mesh": "cube", "position": [0, 1, -4], "scale": [6, 2, 0.5], "color": "#888888"}}
+\`\`\`
+- get_scene {}
+- create_entity {name, mesh:"cube|sphere|plane|cylinder|cone|capsule|none", position, rotation, scale, color, rigidbody:true, trigger:true, light:"point|directional"}
+- create_many {entities:[...]}
+- update_entity {target, ...fields}   - delete_entity {target}
+- set_script {target, code}  (Rhai: fn update(dt) { this.ry += 90.0 * dt; }  key("SPACE"), hud("text"), play_sound(path))
+- generate_sound {preset:"coin|jump|laser|explosion|hit|powerup|click|blip", name}
+- add_camera {name, position, follow}   - set_environment {sky_top, sky_bottom, ambient}
++Y is up, units are meters, a cube on the ground has y = height/2. When done, answer briefly with NO tool blocks.
+`;
+
 export const SCRIPT_DOCS = `## Scripting (Rhai)
 Each entity may have a Rhai script. The engine calls \`fn start()\` once and \`fn update(dt)\` every frame. Inside them \`this\` is the entity:
   this.x this.y this.z  (position)   this.rx this.ry this.rz (rotation, degrees)   this.sx this.sy this.sz (scale)

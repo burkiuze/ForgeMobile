@@ -15,7 +15,7 @@ export function Markdown({ text }: { text: string }) {
       while (i < lines.length && !lines[i].trim().startsWith('```')) body.push(lines[i++]);
       i++;
       blocks.push(
-        <pre key={key++} className="selectable">
+        <pre key={key++} className="selectable max-w-full overflow-x-auto">
           {body.join('\n')}
         </pre>,
       );

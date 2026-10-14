@@ -1,11 +1,15 @@
 import {
   Bot, Brain, ChevronLeft, ChevronRight, Cpu, Download, Github, Info, KeyRound, Loader2, Monitor, Palette, PenTool, RefreshCw,
-  Settings as Cog, Trash2, Volume2,
+  Settings as Cog, Smartphone, Trash2, Volume2,
 } from 'lucide-react';
-import React, { useState } from 'react';
-import { checkOpenRouterKey, listLanModels } from '../../ai/client';
+import { ModelPicker } from '../common/ModelPicker';
+import { DeviceModels } from './DeviceModels';
+import { ALL_KEY_NAMES, PROVIDERS } from '../../ai/providers';
+import React, { useEffect, useState } from 'react';
+import { checkOpenRouterKey } from '../../ai/client';
+import { checkAnthropicKey } from '../../ai/anthropic';
 import { Memory, clearLocal } from '../../ai/memory';
-import { CLOUD_MODELS, displayName, normalizeLanUrl } from '../../ai/models';
+import { displayName } from '../../ai/models';
 import { useT } from '../../i18n';
 import { deviceInfo, http, openUrl } from '../../platform/native';
 import { KeyName, importEnv, maskKey, syncForgeEnv, useKeys } from '../../state/keys';
@@ -14,11 +18,14 @@ import { useUpdater } from '../../state/updater';
 import { ACCENTS, AccentId, THEMES, ThemeId } from '../../theme';
 import { Confirm, Logo, MadeBy, Row, Segmented, Sheet, Slider, Toggle, haptic, pickFiles, toast } from '../common/ui';
 
-type Page = 'general' | 'appearance' | 'editor' | 'rendering' | 'audio' | 'ai' | 'models' | 'memory' | 'keys' | 'updates' | 'about';
+type Page = 'general' | 'appearance' | 'editor' | 'rendering' | 'audio' | 'ai' | 'models' | 'device' | 'memory' | 'keys' | 'updates' | 'about';
 
 export function SettingsSheet({ open, onClose, initial }: { open: boolean; onClose: () => void; initial?: Page }) {
   const t = useT();
   const [page, setPage] = useState<Page | null>(initial ?? null);
+  useEffect(() => {
+    if (open) setPage(initial ?? null);
+  }, [open]);
   const pages: { id: Page; icon: React.ReactNode; title: string; hint: string }[] = [
     { id: 'general', icon: <Cog className="w-5 h-5" />, title: t('General', 'Genel'), hint: t('Language, start screen, autosave', 'Dil, açılış ekranı, otomatik kayıt') },
     { id: 'appearance', icon: <Palette className="w-5 h-5" />, title: t('Appearance', 'Görünüm'), hint: t('Theme, accent colour, size', 'Tema, vurgu rengi, boyut') },
@@ -26,7 +33,8 @@ export function SettingsSheet({ open, onClose, initial }: { open: boolean; onClo
     { id: 'rendering', icon: <Monitor className="w-5 h-5" />, title: t('Rendering', 'Görüntü'), hint: t('Shadows, quality, stats', 'Gölgeler, kalite, istatistik') },
     { id: 'audio', icon: <Volume2 className="w-5 h-5" />, title: t('Audio', 'Ses'), hint: t('Volume, mute', 'Ses düzeyi, sessiz') },
     { id: 'ai', icon: <Bot className="w-5 h-5" />, title: t('Forge AI', 'Forge AI'), hint: t('On/off, permissions, modes, web', 'Aç/kapa, izinler, modlar, web') },
-    { id: 'models', icon: <Cpu className="w-5 h-5" />, title: t('Agents & models', 'Ajanlar ve modeller'), hint: t('OpenRouter, local network, per-agent', 'OpenRouter, yerel ağ, ajan başına') },
+    { id: 'models', icon: <Cpu className="w-5 h-5" />, title: t('Providers & models', 'Sağlayıcılar ve modeller'), hint: 'OpenRouter, Claude, OpenAI, Gemini, Groq, Mistral, DeepSeek, xAI…' },
+    { id: 'device', icon: <Smartphone className="w-5 h-5" />, title: t('On-device models', 'Telefondaki modeller'), hint: t('38 quantized models that run offline', 'İnternetsiz çalışan 38 sıkıştırılmış model') },
     { id: 'memory', icon: <Brain className="w-5 h-5" />, title: t('Agent memory', 'Ajan hafızası'), hint: 'Built-in / TencentDB Agent Memory' },
     { id: 'keys', icon: <KeyRound className="w-5 h-5" />, title: t('API keys & Forge.env', 'API anahtarları ve Forge.env'), hint: 'OpenRouter, Hugging Face, GitHub' },
     { id: 'updates', icon: <RefreshCw className="w-5 h-5" />, title: t('Updates', 'Güncellemeler'), hint: t('Automatic updates from GitHub', 'GitHub’dan otomatik güncelleme') },
@@ -36,7 +44,7 @@ export function SettingsSheet({ open, onClose, initial }: { open: boolean; onClo
   return (
     <Sheet
       open={open}
-      onClose={() => (page ? setPage(null) : onClose())}
+      onClose={() => (page && page !== initial ? setPage(null) : onClose())}
       full
       title={
         cur ? (
@@ -69,7 +77,8 @@ export function SettingsSheet({ open, onClose, initial }: { open: boolean; onClo
       {page === 'rendering' && <Rendering />}
       {page === 'audio' && <AudioPrefs />}
       {page === 'ai' && <AiPrefs />}
-      {page === 'models' && <ModelsPrefs />}
+      {page === 'models' && <ModelsPrefs onDevice={() => setPage('device')} />}
+      {page === 'device' && <DeviceModels />}
       {page === 'memory' && <MemoryPrefs />}
       {page === 'keys' && <KeysPrefs />}
       {page === 'updates' && <UpdatesPrefs />}
@@ -267,70 +276,20 @@ function AiPrefs() {
   );
 }
 
-function ModelsPrefs() {
+function ModelsPrefs({ onDevice }: { onDevice: () => void }) {
   const t = useT();
   const s = useSettings();
-  const [lanModels, setLanModels] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [custom, setCustom] = useState('');
-  const all = [...CLOUD_MODELS.map((m) => m.id), ...s.customModels, ...lanModels.map((m) => `lan:${m}`)];
+  const all = [...new Set([s.selectedModel, ...PROVIDERS.flatMap((p) => p.models.map((m) => (p.id === 'openrouter' ? m.id : `${p.id}:${m.id}`))), ...s.customModels])];
   const opts = [{ v: '', label: t('Same as main', 'Ana modelle aynı') }, ...all.map((v) => ({ v, label: displayName(v) }))];
-  const scan = async () => {
-    setBusy(true);
-    try {
-      const ms = await listLanModels(normalizeLanUrl(s.lanUrl));
-      setLanModels(ms);
-      toast(`${ms.length} ${t('models found', 'model bulundu')}`, 'ok');
-    } catch (e) {
-      toast(`${t('Server not reachable', 'Sunucuya ulaşılamadı')}: ${(e as Error).message}`, 'err');
-    }
-    setBusy(false);
-  };
   return (
     <div className="pb-4 space-y-4">
-      <div className="card px-4 py-3 space-y-2">
-        <div className="font-semibold">{t('Main model', 'Ana model')}</div>
-        <select className="input" value={s.selectedModel} onChange={(e) => s.update({ selectedModel: e.target.value })}>
-          {[...new Set([s.selectedModel, ...all])].map((v) => (
-            <option key={v} value={v}>
-              {displayName(v)}
-            </option>
-          ))}
-        </select>
-        <div className="flex gap-2">
-          <input className="input font-mono" placeholder="vendor/model:free" value={custom} onChange={(e) => setCustom(e.target.value)} autoCapitalize="off" />
-          <button
-            className="btn-ghost"
-            disabled={!custom.trim()}
-            onClick={() => (s.update({ customModels: [...new Set([...s.customModels, custom.trim()])], selectedModel: custom.trim() }), setCustom(''))}
-          >
-            +
-          </button>
-        </div>
-        <div className="text-[0.72rem] text-mute">{t('Any OpenRouter model id works.', 'Herhangi bir OpenRouter model kimliği olur.')}</div>
+      <div className="card px-3 py-3">
+        <div className="font-semibold mb-2">{t('Main model', 'Ana model')}</div>
+        <ModelPicker onOpenDevice={onDevice} />
       </div>
-
-      <div className="card px-4 py-3 space-y-2">
-        <div className="font-semibold">{t('Local models on your network', 'Ağındaki yerel modeller')}</div>
-        <div className="text-[0.75rem] text-mute">
-          {t(
-            'Phones are too small for big models, so run them on your PC (Forge desktop’s llama.cpp, Ollama or LM Studio) and use them from here over Wi-Fi.',
-            'Telefonlar büyük modeller için küçük; modelleri bilgisayarında çalıştır (Forge masaüstü llama.cpp, Ollama veya LM Studio) ve buradan Wi-Fi üzerinden kullan.',
-          )}
-        </div>
-        <input className="input font-mono" value={s.lanUrl} onChange={(e) => s.update({ lanUrl: e.target.value })} placeholder="http://192.168.1.20:11434/v1" autoCapitalize="off" />
-        <button className="btn-ghost w-full" onClick={scan} disabled={busy}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />} {t('Find models', 'Modelleri bul')}
-        </button>
-        {lanModels.map((m) => (
-          <button key={m} className={`w-full text-left px-3 py-2 rounded-xl ${s.selectedModel === `lan:${m}` ? 'bg-acc/15 text-acc' : 'bg-s2'}`} onClick={() => s.update({ selectedModel: `lan:${m}` })}>
-            💻 {m}
-          </button>
-        ))}
-      </div>
-
       <div className="card px-4 py-3">
         <div className="font-semibold mb-1">{t('Per-agent models', 'Ajan başına modeller')}</div>
+        <div className="text-[0.72rem] text-mute mb-1">{t('Mix providers: e.g. a fast model plans, Claude builds.', 'Sağlayıcıları karıştır: örn. hızlı model planlasın, Claude kursun.')}</div>
         {(
           [
             ['plannerModel', t('Planner', 'Planlayıcı')],
@@ -424,12 +383,18 @@ function KeysPrefs() {
     if (!v) return;
     try {
       if (k === 'OPENROUTER_API_KEY') toast(await checkOpenRouterKey(v), 'ok');
+      else if (k === 'ANTHROPIC_API_KEY') toast(await checkAnthropicKey(v), 'ok');
       else if (k === 'HF_TOKEN') {
         const r = await http({ url: 'https://huggingface.co/api/whoami-v2', headers: { Authorization: `Bearer ${v}` } });
         toast(r.ok ? `OK · ${r.json().name}` : `HTTP ${r.status}`, r.ok ? 'ok' : 'err');
-      } else {
+      } else if (k === 'GITHUB_TOKEN') {
         const r = await http({ url: 'https://api.github.com/user', headers: { Authorization: `Bearer ${v}` } });
         toast(r.ok ? `OK · ${r.json().login}` : `HTTP ${r.status}`, r.ok ? 'ok' : 'err');
+      } else {
+        const p = PROVIDERS.find((x) => x.key === k);
+        if (!p?.base) return toast('—');
+        const r = await http({ url: `${p.base}/models`, headers: { Authorization: `Bearer ${v}` } });
+        toast(r.ok ? `OK · ${p.name}` : `HTTP ${r.status}`, r.ok ? 'ok' : 'err');
       }
     } catch (e) {
       toast((e as Error).message, 'err');
@@ -464,7 +429,7 @@ function KeysPrefs() {
           </button>
         </div>
       </div>
-      {(['OPENROUTER_API_KEY', 'HF_TOKEN', 'GITHUB_TOKEN'] as KeyName[]).map((k) => (
+      {ALL_KEY_NAMES.map((k) => (
         <div key={k} className="card px-4 py-3 space-y-2">
           <div className="flex items-center justify-between">
             <div className="font-mono text-[0.8rem] font-semibold">{k}</div>

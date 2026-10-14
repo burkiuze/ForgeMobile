@@ -1,7 +1,10 @@
 // OpenAI-compatible chat client with SSE streaming (OpenRouter or a LAN server).
 
 import { http, httpStream } from '../platform/native';
+import { streamClaude } from './anthropic';
+import { streamDevice } from './device';
 import { Endpoint, OPENROUTER_BASE } from './models';
+import { provider } from './providers';
 
 export interface Msg {
   role: 'system' | 'user' | 'assistant';
@@ -35,6 +38,7 @@ function headers(ep: Endpoint): Record<string, string> {
     'X-Title': 'Forge Mobile',
   };
   if (ep.key.trim()) h.Authorization = `Bearer ${ep.key.trim()}`;
+  if (ep.viaProxy) h['X-Forge-Client'] = 'forge-mobile';
   return h;
 }
 
@@ -45,9 +49,13 @@ export async function streamChat(
   signal: AbortSignal | undefined,
   onDelta: (d: string) => void,
 ): Promise<Reply> {
-  if (ep.backend === 'openrouter' && !ep.key.trim()) {
-    throw new Error('OpenRouter API key missing — add it in Settings › API Keys (or connect Forge.env).');
+  if (ep.provider === 'device') return streamDevice(ep.model, messages, temperature, signal, onDelta);
+  const prov = provider(ep.provider);
+  if (prov.key && !ep.key.trim() && !ep.viaProxy && ep.provider !== 'custom') {
+    throw new Error(`${prov.name} API key missing — add ${prov.key} in Settings › Providers (or connect Forge.env).`);
   }
+  if (ep.provider === 'anthropic') return streamClaude(ep.model, ep.key, messages, signal, onDelta);
+  if (!ep.base) throw new Error(`${prov.name}: base URL is not set (Settings › Providers).`);
   let text = '';
   let model = ep.model;
   let providerError = '';
@@ -120,4 +128,15 @@ export async function listLanModels(base: string): Promise<string[]> {
   const r = await http({ url: `${root}/api/tags`, timeoutMs: 8000 });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return (r.json().models || []).map((m: any) => String(m.name));
+}
+
+/** Model ids offered by an OpenAI-compatible provider (`GET /models`). */
+export async function listModels(ep: Endpoint): Promise<string[]> {
+  const h: Record<string, string> = {};
+  if (ep.key.trim()) h.Authorization = `Bearer ${ep.key.trim()}`;
+  const r = await http({ url: `${ep.base}/models`, headers: h, timeoutMs: 15000 });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const v = r.json();
+  const list: any[] = Array.isArray(v?.data) ? v.data : Array.isArray(v?.models) ? v.models : [];
+  return list.map((m) => String(m.id ?? m.name ?? '')).filter(Boolean).map((id) => id.replace(/^models\//, '')).sort();
 }

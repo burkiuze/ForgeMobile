@@ -25,6 +25,7 @@ declare global {
 }
 
 interface BridgeCallbacks {
+  _head(id: string, res: { status: number; headers: Record<string, string> }): void;
   _resolve(id: string, res: RawResponse): void;
   _reject(id: string, err: string): void;
   _chunk(id: string, text: string): void;
@@ -65,6 +66,7 @@ export const isNative = !!native;
 // ------------------------------------------------------------------ callbacks
 
 type Pending = {
+  onHead?: (r: { status: number; headers: Record<string, string> }) => void;
   resolve: (r: RawResponse) => void;
   reject: (e: Error) => void;
   onChunk?: (t: string) => void;
@@ -75,6 +77,9 @@ let seq = 0;
 
 if (typeof window !== 'undefined') {
   window.ForgeBridge = {
+    _head(id, res) {
+      pending.get(id)?.onHead?.(res);
+    },
     _resolve(id, res) {
       const p = pending.get(id);
       pending.delete(id);
@@ -307,3 +312,56 @@ if (typeof window !== 'undefined') {
     return false;
   };
 }
+
+/**
+ * A `fetch` that streams through the native bridge on Android (no CORS), so SDKs that take a
+ * custom fetch (e.g. the Anthropic SDK) work in the WebView. Falls back to window.fetch.
+ */
+export const nativeFetch: typeof fetch = async (input, init) => {
+  if (!native) return fetch(input as RequestInfo, init);
+  const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url;
+  const headers: Record<string, string> = {};
+  new Headers(init?.headers || (input instanceof Request ? input.headers : undefined)).forEach((v, k) => (headers[k] = v));
+  let body: string | undefined;
+  if (typeof init?.body === 'string') body = init.body;
+  else if (init?.body) body = await new Response(init.body as BodyInit).text();
+  const id = `f${++seq}`;
+  const enc = new TextEncoder();
+  let ctrl!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      ctrl = c;
+    },
+    cancel() {
+      native!.abort(id);
+      pending.delete(id);
+    },
+  });
+  return new Promise<Response>((resolve, reject) => {
+    let headed = false;
+    pending.set(id, {
+      onHead: (h) => {
+        headed = true;
+        resolve(new Response(stream, { status: h.status, headers: h.headers }));
+      },
+      resolve: () => {},
+      reject: (e) => (headed ? ctrl.error(e) : reject(e)),
+      onChunk: (t) => ctrl.enqueue(enc.encode(t)),
+      onDone: () => {
+        try {
+          ctrl.close();
+        } catch {
+          /* already closed */
+        }
+      },
+    });
+    init?.signal?.addEventListener('abort', () => {
+      native!.abort(id);
+      pending.delete(id);
+      const err = new DOMException('Aborted', 'AbortError');
+      if (headed) ctrl.error(err);
+      else reject(err);
+    });
+    native!.request(id, JSON.stringify({ url, method: init?.method || 'GET', headers, body, stream: true, timeoutMs: 300000 }));
+  });
+};

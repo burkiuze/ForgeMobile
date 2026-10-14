@@ -49,7 +49,10 @@ export interface Settings {
   coderModel: string;
   exploreModel: string;
   lanUrl: string;
+  customUrl: string;
   customModels: string[];
+  /** model lists fetched from providers (`GET /models`) */
+  providerModels: Record<string, string[]>;
   // Memory
   memory: MemoryConfig;
   // Keys
@@ -99,7 +102,9 @@ export const defaultSettings = (): Settings => ({
   coderModel: '',
   exploreModel: '',
   lanUrl: 'http://192.168.1.2:11434/v1',
+  customUrl: '',
   customModels: [],
+  providerModels: {},
   memory: defaultMemoryConfig(),
   forgeEnvRepo: 'burkiuze/Forge.env',
   forgeEnvPath: '.env',

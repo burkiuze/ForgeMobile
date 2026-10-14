@@ -4,7 +4,8 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Mode } from '../../../ai/agent';
-import { CLOUD_MODELS, displayName } from '../../../ai/models';
+import { displayName } from '../../../ai/models';
+import { provider, splitModelId } from '../../../ai/providers';
 import { stripToolBlocks } from '../../../ai/tools';
 import { useT } from '../../../i18n';
 import { openUrl } from '../../../platform/native';
@@ -12,6 +13,7 @@ import { LlmStep, ToolStep, Turn, useChat } from '../../../state/chat';
 import { useEditor } from '../../../state/editor';
 import { getKey, useKeys } from '../../../state/keys';
 import { useSettings } from '../../../state/settings';
+import { ModelPicker } from '../../common/ModelPicker';
 import { Logo, Sheet, haptic } from '../../common/ui';
 import { describe, roleLabel } from './describe';
 import { Markdown } from './markdown';
@@ -45,7 +47,8 @@ export function AgentPanel() {
   const [cmdSheet, setCmdSheet] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const empty = chat.turns.length === 0;
-  const needsKey = !model.startsWith('lan:') && !keys.OPENROUTER_API_KEY;
+  const prov = provider(splitModelId(model).provider);
+  const needsKey = !!prov.key && !prov.builtIn && prov.id !== 'custom' && !keys[prov.key];
 
   useEffect(() => {
     list.current?.scrollTo({ top: list.current.scrollHeight, behavior: 'smooth' });
@@ -61,11 +64,11 @@ export function AgentPanel() {
   };
 
   return (
-    <div className="flex flex-col h-full relative">
+    <div className="flex flex-col h-full min-h-0 relative overflow-hidden">
       {/* header */}
       <div className="flex items-center gap-2 px-3 h-12 border-b border-line/50">
         <Logo size={24} />
-        <div className="font-bold flex-1">Forge AI</div>
+        <div className="font-bold flex-1 min-w-0 truncate">Forge AI</div>
         <button className="icon-btn w-10 h-10" disabled={chat.busy} onClick={chat.newChat} aria-label="new chat">
           <MessageSquarePlus className="w-5 h-5" />
         </button>
@@ -74,29 +77,32 @@ export function AgentPanel() {
       {needsKey && (
         <button
           className="mx-3 mt-3 card px-3 py-2.5 text-left text-[0.8rem] border-gold/60 bg-gold/10"
-          onClick={() => useEditor.getState().openSheet('settings')}
+          onClick={() => setModelSheet(true)}
         >
-          🔑 {t('Add your OpenRouter key or connect Forge.env (Settings › API keys) to use cloud models.', 'Bulut modelleri için OpenRouter anahtarını ekle ya da Forge.env’i bağla (Ayarlar › API anahtarları).')}
+          🔑 {t(`Add your ${prov.name} key (tap the model chip) or connect Forge.env.`, `${prov.name} anahtarını ekle (model düğmesine dokun) ya da Forge.env’i bağla.`)}
         </button>
       )}
 
       {empty ? (
-        <div className="flex-1 flex flex-col items-center justify-center px-5 text-center ember-glow">
-          <Logo size={64} />
+        <div className="flex-1 min-h-0 overflow-y-auto ember-glow">
+         <div className="min-h-full flex flex-col items-center justify-center px-4 py-6 text-center">
+          <Logo size={56} />
           <div className="text-[1.25rem] font-bold mt-3">{project?.name || 'Forge'}</div>
           <div className="text-[0.85rem] text-mute mt-1 max-w-xs">
             {t('Ask Forge AI to build, fix or explain anything in your game.', 'Oyununda her şeyi kurmasını, düzeltmesini veya açıklamasını Forge AI’dan iste.')}
           </div>
-          <div className="w-full max-w-md mt-5">
+          <div className="w-full max-w-md mt-5 text-left">
             <InputBox value={input} setValue={setInput} onSend={send} onModel={() => setModelSheet(true)} onCmd={() => setCmdSheet(true)} big />
           </div>
-          <div className="flex flex-wrap gap-2 justify-center mt-4 max-w-md">
+          <div className="w-full max-w-md mt-4 grid gap-1.5 text-left">
             {COMMANDS.slice(0, 5).map((c) => (
-              <button key={c.cmd} className="chip" onClick={() => setInput(`${c.cmd} `)}>
-                <span className="font-mono text-acc">{c.cmd}</span> {t(c.en, c.tr)}
+              <button key={c.cmd} className="card px-3 h-11 flex items-center gap-2.5 min-w-0 active:scale-[0.99]" onClick={() => setInput(`${c.cmd} `)}>
+                <span className="font-mono text-acc text-[0.8rem] w-14 shrink-0">{c.cmd}</span>
+                <span className="text-[0.82rem] truncate">{t(c.en, c.tr)}</span>
               </button>
             ))}
           </div>
+         </div>
         </div>
       ) : (
         <>
@@ -192,7 +198,7 @@ function InputBox({ value, setValue, onSend, onModel, onCmd, big }: { value: str
         <button className="w-9 h-9 rounded-full bg-s2 flex items-center justify-center text-mute shrink-0" onClick={onCmd} aria-label="workflows">
           <Plus className="w-4 h-4" />
         </button>
-        <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
           <button
             className="h-8 px-2.5 rounded-full bg-s2 text-[0.75rem] font-semibold flex items-center gap-1 shrink-0"
             onClick={() => {
@@ -218,7 +224,7 @@ function InputBox({ value, setValue, onSend, onModel, onCmd, big }: { value: str
           >
             <Globe className="w-4 h-4" />
           </button>
-          <button className="h-8 px-2.5 rounded-full bg-s2 text-[0.75rem] font-semibold flex items-center gap-1 shrink-0 max-w-[8.5rem]" onClick={onModel}>
+          <button className="h-8 px-2.5 rounded-full bg-s2 text-[0.75rem] font-semibold flex items-center gap-1 min-w-0 max-w-full" onClick={onModel}>
             <Cpu className="w-3.5 h-3.5 text-acc shrink-0" />
             <span className="truncate">{displayName(model)}</span>
           </button>
@@ -250,9 +256,9 @@ function TurnView({ turn, live }: { turn: Turn; live: boolean }) {
   return (
     <div className="fade-in">
       <div className="flex justify-end">
-        <div className="max-w-[85%] rounded-[1.2rem] rounded-br-md bg-s2 border border-line/60 px-3.5 py-2.5 text-[0.9rem] whitespace-pre-wrap selectable">{turn.user}</div>
+        <div className="max-w-[85%] rounded-[1.2rem] rounded-br-md bg-s2 border border-line/60 px-3.5 py-2.5 text-[0.9rem] whitespace-pre-wrap break-words selectable">{turn.user}</div>
       </div>
-      <div className="mt-3 space-y-1.5">
+      <div className="mt-3 space-y-1.5 min-w-0 break-words">
         {turn.memories.length > 0 && (
           <Collapsible open={!!open.mem} onToggle={() => toggle('mem')} icon={<Brain className="w-3.5 h-3.5" />} label={`${turn.memories.length} ${t('memories recalled', 'anı hatırlandı')}`}>
             {turn.memories.map((m, i) => (
@@ -416,38 +422,9 @@ function ApprovalCard() {
 
 function ModelSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
-  const s = useSettings();
-  const lang = s.lang;
-  const pick = (id: string) => (haptic(), s.update({ selectedModel: id }), onClose());
   return (
-    <Sheet open={open} onClose={onClose} title={t('Model', 'Model')}>
-      <div className="grid gap-1.5 pb-2">
-        {CLOUD_MODELS.map((m) => (
-          <button key={m.id} className={`card px-3 py-2.5 text-left flex items-center gap-3 ${s.selectedModel === m.id ? 'border-acc' : ''}`} onClick={() => pick(m.id)}>
-            <div className="flex-1 min-w-0">
-              <div className="font-semibold">{m.name}</div>
-              <div className="text-[0.72rem] text-mute truncate">{lang === 'tr' ? m.blurbTr : m.blurb}</div>
-            </div>
-            {s.selectedModel === m.id && <Check className="w-5 h-5 text-acc" />}
-          </button>
-        ))}
-        {s.customModels.map((id) => (
-          <button key={id} className={`card px-3 py-2.5 text-left flex items-center gap-3 ${s.selectedModel === id ? 'border-acc' : ''}`} onClick={() => pick(id)}>
-            <div className="flex-1 font-mono text-[0.8rem] truncate">{id}</div>
-            {s.selectedModel === id && <Check className="w-5 h-5 text-acc" />}
-          </button>
-        ))}
-        {s.selectedModel.startsWith('lan:') && (
-          <div className="card px-3 py-2.5 border-acc flex items-center gap-3">
-            <div className="flex-1">💻 {s.selectedModel.slice(4)}</div>
-            <Check className="w-5 h-5 text-acc" />
-          </div>
-        )}
-        <button className="btn-ghost mt-1" onClick={() => (onClose(), useEditor.getState().openSheet('models'))}>
-          <Cpu className="w-4 h-4" /> {t('Local network models & more…', 'Yerel ağ modelleri ve fazlası…')}
-        </button>
-        {!getKey('OPENROUTER_API_KEY') && <div className="text-[0.72rem] text-gold">{t('Cloud models need an OpenRouter key.', 'Bulut modelleri için OpenRouter anahtarı gerekir.')}</div>}
-      </div>
+    <Sheet open={open} onClose={onClose} title={t('Provider & model', 'Sağlayıcı ve model')} full>
+      <ModelPicker onPicked={onClose} onOpenDevice={() => (onClose(), useEditor.getState().openSheet('device'))} />
     </Sheet>
   );
 }

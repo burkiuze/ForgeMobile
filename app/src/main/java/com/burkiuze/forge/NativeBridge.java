@@ -120,7 +120,10 @@ public class NativeBridge {
                         respHeaders.put(h.getKey().toLowerCase(), h.getValue().get(0));
                 }
                 if (req.optBoolean("stream", false) && in != null) {
-                    byte[] buf = new byte[4096];
+                    JSONObject head = new JSONObject();
+                    head.put("status", status);
+                    head.put("headers", respHeaders);
+                    emit("_head", id, head.toString());
                     int n;
                     StringBuilder pending = new StringBuilder();
                     long last = System.currentTimeMillis();

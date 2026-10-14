@@ -11,6 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
+    "@wllama/wllama": "^3.6.1",
     "fflate": "^0.8.2",
     "lucide-react": "^0.359.0",
     "react": "^18.3.1",

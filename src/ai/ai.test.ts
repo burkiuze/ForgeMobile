@@ -118,12 +118,12 @@ function makeJob(mode: 'planning' | 'fast', permission: 'manual' | 'auto', scene
       summary: '',
       web: false,
       sessionId: 's',
-      openrouterKey: '',
+      key: () => '',
       project: 'agent-test',
       memory: new Memory({ backend: 'off', url: '', token: '', serviceId: '', userId: '', recallLimit: 3 }),
       settings: {
         selectedModel: 'lan:mock', plannerModel: '', builderModel: '', reviewerModel: '', coderModel: '', exploreModel: '',
-        temperature: 0.4, maxSteps: 6, usePlanner: true, useReviewer: true, lanUrl: base, webResults: 5,
+        temperature: 0.4, maxSteps: 6, usePlanner: true, useReviewer: true, lanUrl: base, customUrl: '', webResults: 5,
       },
     },
     {
