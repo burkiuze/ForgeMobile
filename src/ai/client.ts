@@ -4,7 +4,7 @@ import { http, httpStream } from '../platform/native';
 import { streamClaude } from './anthropic';
 import { streamDevice } from './device';
 import { Endpoint, OPENROUTER_BASE } from './models';
-import { provider } from './providers';
+import { AUTO_ID, AUTO_MODELS, provider } from './providers';
 
 export interface Msg {
   role: 'system' | 'user' | 'assistant';
@@ -42,6 +42,16 @@ function headers(ep: Endpoint): Record<string, string> {
   return h;
 }
 
+/** OpenRouter "Auto" → our curated free list (with server-side fallthrough). */
+export function requestBody(ep: Endpoint, messages: Msg[], temperature: number): Record<string, unknown> {
+  const body: Record<string, unknown> = { model: ep.model, messages, stream: true, temperature };
+  if (ep.provider === 'openrouter' && ep.model === AUTO_ID) {
+    body.model = AUTO_MODELS[0];
+    body.models = AUTO_MODELS;
+  }
+  return body;
+}
+
 export async function streamChat(
   ep: Endpoint,
   messages: Msg[],
@@ -59,13 +69,14 @@ export async function streamChat(
   let text = '';
   let model = ep.model;
   let providerError = '';
+  let reasoning = '';
   const parser = new SseParser();
   const res = await httpStream(
     {
       url: `${ep.base}/chat/completions`,
       method: 'POST',
       headers: headers(ep),
-      body: JSON.stringify({ model: ep.model, messages, stream: true, temperature }),
+      body: JSON.stringify(requestBody(ep, messages, temperature)),
       timeoutMs: 180000,
       signal,
     },
@@ -83,6 +94,8 @@ export async function streamChat(
           return;
         }
         if (typeof v.model === 'string') model = v.model;
+        const r = v.choices?.[0]?.delta?.reasoning;
+        if (typeof r === 'string') reasoning += r;
         const d = v.choices?.[0]?.delta?.content;
         if (typeof d === 'string' && d) {
           text += d;
@@ -100,6 +113,8 @@ export async function streamChat(
     throw new Error(`HTTP ${res.status}: ${msg.slice(0, 300)}`);
   }
   if (providerError) throw new Error(providerError);
+  // Some reasoning models put the whole answer (or the tool block) in the reasoning channel.
+  if (!text.trim() && /```tool/.test(reasoning)) text = reasoning.slice(reasoning.indexOf('```tool'));
   if (!text.trim()) throw new Error('Model returned an empty reply (it may be rate-limited — try another model).');
   return { text, model };
 }

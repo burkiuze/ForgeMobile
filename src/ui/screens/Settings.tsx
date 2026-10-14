@@ -242,14 +242,6 @@ function AiPrefs() {
         >
           <Segmented value={s.permission} onChange={(permission) => s.update({ permission })} options={[{ v: 'manual', label: t('✋ Manual', '✋ Manuel') }, { v: 'auto', label: '⚡ Auto' }]} small />
         </Row>
-        <Row label={t('Default mode', 'Varsayılan mod')}>
-          <Segmented
-            value={s.defaultMode}
-            onChange={(defaultMode) => s.update({ defaultMode })}
-            options={[{ v: 'planning', label: t('Plan', 'Plan') }, { v: 'fast', label: t('Fast', 'Hızlı') }, { v: 'ask', label: t('Ask', 'Sor') }]}
-            small
-          />
-        </Row>
         <Row label={t('Web search from this phone', 'Bu telefondan web araması')}>
           <Toggle value={s.web} onChange={(v) => s.update({ web: v })} />
         </Row>
@@ -264,12 +256,6 @@ function AiPrefs() {
         </Row>
         <Row label={t('Temperature', 'Sıcaklık')} hint={t('Low = precise, high = creative', 'Düşük = kesin, yüksek = yaratıcı')}>
           <Slider value={s.temperature} min={0} max={1.2} step={0.05} onChange={(v) => s.update({ temperature: v })} />
-        </Row>
-        <Row label={t('Planner agent', 'Planlayıcı ajan')}>
-          <Toggle value={s.usePlanner} onChange={(v) => s.update({ usePlanner: v })} />
-        </Row>
-        <Row label={t('Reviewer agent', 'Denetçi ajan')}>
-          <Toggle value={s.useReviewer} onChange={(v) => s.update({ useReviewer: v })} />
         </Row>
       </div>
     </div>

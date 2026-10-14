@@ -5,6 +5,15 @@ export const AUTO_ID = 'openrouter/free';
 
 /** Built-in Forge AI: a small server that holds the owner's OpenRouter key (free models only),
  *  so OpenRouter works with no key at all. A user's own key, if set, goes straight to OpenRouter. */
+/** What "Auto" really asks OpenRouter for: free chat models that follow tool instructions well,
+ *  tried in order (OpenRouter falls through on rate limits / outages). openrouter/free alone can
+ *  land on safety classifiers or tiny models that can't build anything. */
+export const AUTO_MODELS = [
+  'nvidia/nemotron-3-super-120b-a12b:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'google/gemma-4-31b-it:free',
+];
+
 export const FORGE_PROXY = 'https://forge-ai-proxy.vercel.app/api/v1';
 
 export type ProviderId =
@@ -37,11 +46,12 @@ export const PROVIDERS: Provider[] = [
     id: 'openrouter', name: 'Forge AI · OpenRouter', key: 'OPENROUTER_API_KEY', base: 'https://openrouter.ai/api/v1', keyUrl: 'https://openrouter.ai/keys', free: true, builtIn: true,
     en: 'Forge AI — free models, works out of the box (no key needed). Add your own key for paid models.', tr: 'Forge AI — ücretsiz modeller, anahtarsız hazır çalışır. Ücretli modeller için kendi anahtarını ekleyebilirsin.',
     models: [
-      { id: AUTO_ID, name: 'Auto', blurb: 'Best available free model, picked automatically', blurbTr: 'En iyi ücretsiz model otomatik seçilir' },
+      { id: AUTO_ID, name: 'Auto', blurb: 'Best free models, switches automatically when one is busy', blurbTr: 'En iyi ücretsiz modeller, biri meşgulse otomatik geçer' },
       { id: 'google/gemma-4-31b-it:free', name: 'Gemma 4 31B', blurb: 'Google DeepMind · 262K ctx · multimodal, tool use', blurbTr: 'Google DeepMind · 262K bağlam · çok kipli' },
-      { id: 'inception/mercury-decide:free', name: 'Mercury Decide', blurb: 'Inception · structured decisions', blurbTr: 'Inception · yapılandırılmış kararlar' },
+      { id: 'nvidia/nemotron-3-super-120b-a12b:free', name: 'Nemotron 3 Super', blurb: 'NVIDIA · 120B MoE · 262K ctx · strong agent', blurbTr: 'NVIDIA · 120B MoE · 262K bağlam · güçlü ajan' },
+      { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', name: 'Nemotron 3 Ultra', blurb: 'NVIDIA · 550B MoE · 1M ctx', blurbTr: 'NVIDIA · 550B MoE · 1M bağlam' },
+      { id: 'poolside/laguna-s-2.1:free', name: 'Laguna S 2.1', blurb: 'Poolside · coding agent · 262K ctx', blurbTr: 'Poolside · kodlama ajanı · 262K bağlam' },
       { id: 'cohere/north-mini-code:free', name: 'North Mini Code', blurb: 'Cohere · agentic coding MoE · 256K ctx', blurbTr: 'Cohere · ajan kodlama · 256K bağlam' },
-      { id: 'thinkingmachines/inkling-small:free', name: 'Inkling Small', blurb: 'Thinking Machines · MoE · 1.05M ctx', blurbTr: 'Thinking Machines · MoE · 1.05M bağlam' },
     ],
   },
   {

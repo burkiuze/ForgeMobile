@@ -3,7 +3,6 @@ import {
   ThumbsDown, ThumbsUp, Wrench, X, Zap,
 } from 'lucide-react';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Mode } from '../../../ai/agent';
 import { displayName } from '../../../ai/models';
 import { provider, splitModelId } from '../../../ai/providers';
 import { stripToolBlocks } from '../../../ai/tools';
@@ -57,8 +56,6 @@ export function AgentPanel() {
   const send = (text = input) => {
     if (!text.trim() || chat.busy) return;
     haptic(10);
-    const mode: Mode | null = text.trim().startsWith('/explain') ? 'ask' : null;
-    if (mode) chat.setMode(mode);
     chat.send(expand(text));
     setInput('');
   };
@@ -150,12 +147,6 @@ function InputBox({ value, setValue, onSend, onModel, onCmd, big }: { value: str
     el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }, [value]);
 
-  const modes: { v: Mode; label: string }[] = [
-    { v: 'planning', label: t('Planning', 'Planlama') },
-    { v: 'fast', label: t('Fast', 'Hızlı') },
-    { v: 'ask', label: t('Ask', 'Sor') },
-  ];
-
   return (
     <div className={`relative rounded-[1.4rem] bg-s1 border border-line/80 shadow-lift ${big ? 'p-3' : 'p-2.5'}`}>
       {mention && (
@@ -199,17 +190,6 @@ function InputBox({ value, setValue, onSend, onModel, onCmd, big }: { value: str
           <Plus className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0 flex flex-wrap items-center gap-1.5">
-          <button
-            className="h-8 px-2.5 rounded-full bg-s2 text-[0.75rem] font-semibold flex items-center gap-1 shrink-0"
-            onClick={() => {
-              const i = modes.findIndex((m) => m.v === chat.mode);
-              chat.setMode(modes[(i + 1) % modes.length].v);
-              haptic(4);
-            }}
-          >
-            <ChevronDown className="w-3.5 h-3.5 text-mute" />
-            {modes.find((m) => m.v === chat.mode)?.label}
-          </button>
           <button
             className={`h-8 px-2.5 rounded-full text-[0.75rem] font-semibold flex items-center gap-1 shrink-0 ${chat.permission === 'auto' ? 'bg-ok/15 text-ok' : 'bg-gold/15 text-gold'}`}
             onClick={() => (haptic(6), chat.setPermission(chat.permission === 'manual' ? 'auto' : 'manual'))}

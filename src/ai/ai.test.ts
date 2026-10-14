@@ -88,6 +88,7 @@ const server = createServer((req, res) => {
     if (sys.includes('PLANNER')) text = '1. Build a tower\n2. Light it';
     else if (sys.includes('REVIEWER')) text = 'APPROVED The tower is built.';
     else if (last.startsWith('Tool results')) text = 'Done: built a tower with a light.';
+    else if (body.includes('STALL') && !last.includes('act now')) text = 'Harika fikir! Hemen başlıyorum, önce kuleyi kurayım.';
     else
       text =
         'Building.\n```tool\n{"tool":"todo_write","args":{"todos":[{"content":"Tower","status":"in_progress"}]}}\n```\n```tool\n{"tool":"create_many","args":{"entities":[{"name":"Tower","mesh":"cylinder","position":[0,3,0],"scale":[2,6,2]},{"name":"Beacon","mesh":"sphere","position":[0,6.5,0],"light":"point"}]}}\n```';
@@ -105,13 +106,13 @@ beforeAll(async () => {
 });
 afterAll(() => server.close());
 
-function makeJob(mode: 'planning' | 'fast', permission: 'manual' | 'auto', scene: Scene) {
+function makeJob(mode: 'planning' | 'fast', permission: 'manual' | 'auto', scene: Scene, prompt = 'Bir kule yap') {
   const events: AgentEvent[] = [];
   const ctrl = new AbortController();
   const approvals: string[] = [];
   const orch = new Orchestrator(
     {
-      prompt: 'Bir kule yap',
+      prompt,
       mode,
       permission,
       history: [],
@@ -151,6 +152,14 @@ describe('agent end-to-end', () => {
     expect(findEntity(scene, 'Beacon')!.light!.kind).toBe('point');
     expect(events.some((e) => e.type === 'todos')).toBe(true);
     expect(r.answer).toContain('APPROVED');
+  });
+
+  it('pushes a model that only announces work into actually doing it', async () => {
+    const scene = starterScene();
+    const { orch, events } = makeJob('fast', 'auto', scene, 'STALL bir kule yap');
+    await orch.run();
+    expect(findEntity(scene, 'Tower')).toBeTruthy();
+    expect(events.filter((e) => e.type === 'start').length).toBe(3);
   });
 
   it('asks before changes in manual mode and respects a rejection', async () => {

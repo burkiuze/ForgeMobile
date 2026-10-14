@@ -96,6 +96,10 @@ You may call tools with fenced blocks (one JSON object per block), then STOP and
 When you have enough information, answer WITHOUT tool blocks and cite sources as markdown links.
 `;
 
+const ACTION_RE = /\b(yap|hazırla|hazirla|ekle|oluştur|olustur|kur|düzelt|duzelt|değiştir|degistir|koy|sil|make|build|create|add|fix|change|remove|generate|write|set up)/i;
+const INTENT_RE = /(yazayım|yapayım|ekleyeyim|kurayım|başlıyorum|basliyorum|başlayalım|ekleyeceğim|yapacağım|oluşturacağım|şimdi|let me|i'll|i will|now i|next,? i|going to)[^.!?]*[.!:…]?\s*$/i;
+const BROKEN_TOOL_RE = /<\|tool_call|\[\w+\(.*\)\]|"tool"\s*:|<tool_call>/;
+
 const BUILDER_GUIDE = `## How to work
 You can build complete games from an empty scene, extend them, or fix one specific part the user points at.
 1. Understand: call get_scene and list_assets first. For a fix, change only what the user asked about (inspect with get_scene / grep / read_file) and keep everything else intact.
@@ -108,7 +112,13 @@ You can build complete games from an empty scene, extend them, or fix one specif
 4. Gameplay: give the player a rigidbody + controller script (set_script or ask_coder), add goals (collectibles, enemies, timers), a HUD via hud(), win/lose conditions, and a Main Camera that follows the player. On phones the joystick drives W/A/S/D and the jump button is SPACE.
 5. Feel: generate_sound for coins/jumps/hits and trigger them with play_sound in scripts; animator presets (bob, spin, pulse, hover, door…) or create_animation for life; materials, textures and lights for looks.
 6. Batch with create_many, give every entity a clear unique name, keep things on the ground (y = height/2).
-7. Finish with a short summary of what you built and how to play, plus anything the user should import or decide.`;
+7. Finish with a short summary of what you built and how to play, plus anything the user should import or decide.
+
+## Rules
+- If the user asks you to make, build, add, change or fix something: DO IT NOW with tool blocks in this same reply. Never ask which option they prefer, never just describe what you will do — pick sensible defaults yourself and act.
+- Keep calling tools turn after turn until the request is really done; only then reply without tool blocks.
+- If a tool fails, fix the call or take another route — don't give up.
+- Only when the user is just chatting or asking a question, answer briefly without tools.`;
 
 const EXPLORE_PROMPT =
   'You are the EXPLORE subagent of the Forge engine: a search specialist. Your role is EXCLUSIVELY to search and analyze ' +
@@ -161,7 +171,7 @@ export class Orchestrator {
       r = await streamChat(ep, messages, t, this.env.signal, emit);
     } catch (e) {
       const msg = (e as Error).message;
-      if (this.env.signal.aborted || ep.model === AUTO_ID || ep.provider !== 'openrouter' || /key missing/.test(msg)) {
+      if (this.env.signal.aborted || ep.provider !== 'openrouter' || /key missing/.test(msg) || (ep.model === AUTO_ID && !/empty reply|HTTP 429|HTTP 5/.test(msg))) {
         this.env.emit({ type: 'end', model: '' });
         throw e;
       }
@@ -335,7 +345,7 @@ export class Orchestrator {
       if (this.job.mode === 'ask') await this.ask();
       else await this.buildFlow();
     } finally {
-      if (this.lastAnswer.trim() || this.job.prompt) {
+      if (this.lastAnswer.trim().length > 2) {
         this.job.memory.storeTurn(this.job.sessionId, this.job.prompt, this.lastAnswer).catch((e) => this.env.emit({ type: 'info', text: `memory: ${e.message}` }));
       }
     }
@@ -406,10 +416,25 @@ export class Orchestrator {
     if (feedback) task += `\n\nReviewer feedback — fix these now:\n${feedback}`;
     msgs.push({ role: 'user', content: task });
     const max = Math.max(1, this.job.settings.maxSteps);
+    const wantsWork = ACTION_RE.test(this.job.prompt);
+    let mutations = 0;
+    let nudges = 0;
     for (let step = 0; step < max; step++) {
       const reply = await this.call('builder', msgs);
       const calls = parseToolCalls(reply);
-      if (!calls.length) return;
+      if (!calls.length) {
+        // Weak models often announce a step ("now I'll write the script…") or emit their own
+        // tool-call syntax, then stop. Push them to actually act.
+        const stalled = BROKEN_TOOL_RE.test(reply) || INTENT_RE.test(reply.slice(-240)) || (wantsWork && mutations === 0);
+        if (!stalled || nudges >= 3 || step + 1 >= max) return;
+        nudges++;
+        msgs.push(
+          { role: 'assistant', content: reply },
+          { role: 'user', content: 'Do not describe or ask — act now. Reply with ```tool blocks (exact format from the tool list) for the next steps, and keep going until the request is finished.' },
+        );
+        continue;
+      }
+      mutations += calls.filter((c) => isMutation(c.name)).length;
       const results = await this.runCalls(calls);
       msgs.push({ role: 'assistant', content: reply });
       const nudge = step + 2 >= max ? '\nYou are almost out of steps: finish now and summarize.' : '';

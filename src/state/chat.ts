@@ -105,7 +105,7 @@ export function execContext(): ExecContext {
 export const useChat = create<ChatStore>((set, get) => ({
   turns: [],
   busy: false,
-  mode: settings().defaultMode,
+  mode: 'fast',
   permission: settings().permission,
   web: settings().web,
   summary: '',
@@ -156,7 +156,7 @@ export const useChat = create<ChatStore>((set, get) => ({
     const id = `t${Date.now().toString(36)}`;
     const turn: Turn = {
       id, user: prompt, steps: [], answer: '', todos: [], sources: [], memories: [], infos: [], done: false,
-      startedAt: Date.now(), ms: 0, changes: 0, undo: ed.snapshot(), mode: get().mode,
+      startedAt: Date.now(), ms: 0, changes: 0, undo: ed.snapshot(), mode: 'fast' as Mode,
     };
     set((st) => ({ turns: [...st.turns, turn], busy: true, acceptAllTurn: false }));
     abort = new AbortController();
@@ -171,7 +171,7 @@ export const useChat = create<ChatStore>((set, get) => ({
     const orch = new Orchestrator(
       {
         prompt,
-        mode: get().mode,
+        mode: 'fast' as Mode,
         permission: get().permission,
         history,
         summary: get().summary,

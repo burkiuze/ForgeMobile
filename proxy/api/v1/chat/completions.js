@@ -19,7 +19,10 @@ const err = (status, message) =>
   new Response(JSON.stringify({ error: { message, code: status } }), { status, headers: { ...cors, 'content-type': 'application/json' } });
 
 // Only free models, so the owner's key can't be billed.
-export const allowed = (m) => typeof m === 'string' && (m === 'openrouter/free' || m.endsWith(':free'));
+const allowed = (m) => typeof m === 'string' && (m === 'openrouter/free' || m.endsWith(':free'));
+// What "Auto" means: free chat models that follow tool instructions (openrouter/free alone can
+// pick safety classifiers or tiny models). Keep in sync with AUTO_MODELS in the app.
+const AUTO = ['nvidia/nemotron-3-super-120b-a12b:free', 'nvidia/nemotron-3-ultra-550b-a55b:free', 'google/gemma-4-31b-it:free'];
 
 function limited(ip) {
   const now = Date.now();
@@ -37,7 +40,7 @@ export default async function handler(req) {
   if (!key) return err(503, 'Forge AI is not configured (OPENROUTER_API_KEY missing).');
   if (!(req.headers.get('x-forge-client') || '').startsWith('forge')) return err(403, 'Forge app only.');
   const ip = (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'anon';
-  if (limited(ip)) return err(429, 'Too many requests — wait a minute.');
+  if (limited(ip)) return err(429, 'Too many requests, wait a minute.');
 
   const raw = await req.text();
   if (raw.length > MAX_BODY) return err(413, 'Request too large.');
@@ -47,7 +50,14 @@ export default async function handler(req) {
   } catch {
     return err(400, 'Bad JSON.');
   }
-  if (!allowed(body.model)) return err(403, 'Forge AI only serves free models (…:free or openrouter/free).');
+  if (body.model === 'openrouter/free' && !body.models) {
+    body.model = AUTO[0];
+    body.models = AUTO;
+  }
+  if (body.models !== undefined) {
+    if (!Array.isArray(body.models) || body.models.length > 3 || !body.models.every(allowed)) return err(403, 'models: up to 3 free models.');
+  }
+  if (!allowed(body.model)) return err(403, 'Forge AI only serves free models (:free or openrouter/free).');
   if (!Array.isArray(body.messages)) return err(400, 'messages required.');
   body.max_tokens = Math.min(Number(body.max_tokens) || MAX_TOKENS, MAX_TOKENS);
   delete body.tools;
