@@ -1,69 +1,57 @@
-# Forge Mobile 🔥
+<p align="center"><img src="docs/forge-banner.png" alt="Forge — Shaped by Fire"></p>
 
-**Forge Mobile** is the mobile companion of **Forge**, an AI-native 3D game engine and editor.
-Shaped by fire.
+# Forge Mobile
 
-## Tech Stack
-- **Framework**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS (Dark theme: `#141414`, `#1C1C1C`, `#262626`, accent `#F05A22`, gold `#F2B233`, bone `#EDE6D8`)
-- **3D Viewport**: Three.js WebGL engine with touch Orbit, Pan, Pinch, and Raycaster selection
-- **Audio**: Web Audio API Procedural SFX Synthesizer
-- **State**: Zustand store with clean decoupled mock service interfaces
-- **Mobile Container**: Capacitor 6 (`com.burkiuze.forge`)
+**Forge’un telefon sürümü.** Bilgisayardaki [Forge](https://github.com/burkiuze/Forge) editörüyle aynı sahne dosyaları, aynı Rhai betikleri, aynı varlık klasörleri ve aynı yapay zekâ ajanları — dokunmatik ekran için yeniden tasarlandı.
 
----
+*The phone edition of Forge: same scenes, scripts, assets and AI agents as the desktop editor, redesigned for touch.*
 
-## Quickstart (Web Development)
+| Başlangıç | Editör | Oyun modu | Forge AI (Manuel onay) |
+|---|---|---|---|
+| ![](docs/screenshots/21-start.png) | ![](docs/screenshots/07-editor-scene.png) | ![](docs/screenshots/11-play.png) | ![](docs/screenshots/16-ai-approval.png) |
+| **Kurulum sihirbazı** | **Forge.env bağlantısı** | **Varlık mağazası** | **Açık tema (Kemik)** |
+| ![](docs/screenshots/01-wizard-language.png) | ![](docs/screenshots/03-wizard-forgeenv.png) | ![](docs/screenshots/13-assets-store.png) | ![](docs/screenshots/22-bone-editor.png) |
+
+## Özellikler
+
+- **Editör:** 3D sahne (dokunmatik döndür / kaydır / yakınlaştır, çift dokunuşla odak), taşı-döndür-ölçekle gizmoları, yapışma, ızgara, nesne ağacı, ayrıntılı Inspector (Transform, malzeme, doku, desen, ışıma, çarpıştırıcı, Rigidbody, ışık, kamera, ses kaynağı, animatör, betik), geri al / yinele, otomatik kayıt.
+- **Oyun modu:** masaüstüyle aynı fizik ve betik API’si; sanal joystick (W/A/S/D), zıplama (SPACE) ve aksiyon (E) düğmeleri, HUD, takip kamerası, sesler, animasyonlar.
+- **Betikler:** Forge’un Rhai betikleri telefonda da çalışır (Rhai → JS çevirici). Şablonlar ve kod parçacığı çubuğu.
+- **Varlıklar:** cihazdan içe aktarma (glTF/GLB, PNG/JPG, WAV/MP3/OGG, .rhai, .anim.json), Poly Haven ve ambientCG’den ücretsiz CC0 model/doku indirme, 8 hazır ses efekti üretici, 10 hazır animasyon, anahtar kareli animasyon editörü.
+- **Forge AI:** Planlayıcı → Kurucu → Denetçi ajanları, alt ajanlar (Kâşif, Kodlayıcı), görev listesi, telefondan web araması, ajan hafızası (yerleşik veya TencentDB Agent Memory). **Önce varlık** kuralı: karakter/obje ilkel şekillerden yapılmaz, gerçek modeller bulunup indirilir. **✋ Manuel** (her değişiklik için Kabul / Tümünü kabul / Reddet) veya **⚡ Auto** izin modu, tur başına “Geri al”.
+- **Modeller:** OpenRouter (Auto, Gemma 4 31B, Mercury Decide, North Mini Code, Inkling Small, istediğin model kimliği) ya da Wi‑Fi’daki bilgisayarında çalışan llama.cpp / Ollama / LM Studio.
+- **Forge.env:** anahtarlar uygulamaya gömülmez. Özel `burkiuze/Forge.env` reposundaki `.env` dosyası salt-okunur bir GitHub token ile okunur (ya da `.env` dosyası seçilir / anahtar yapıştırılır) ve yalnızca telefonun özel depolamasında tutulur.
+- **Temalar:** Kor (varsayılan), Obsidyen, Gece, Kemik (açık) + 6 vurgu rengi, arayüz boyutu.
+- **Güncellemeler:** açılışta GitHub Releases denetlenir, yeni sürüm varsa “Şimdi güncellensin mi?” diye sorulur.
+- **PC ile uyum:** projeyi `.scene.json` olarak dışa aktar → bilgisayardaki Forge’da aç; PC’deki sahneyi “Cihazdan aç” ile telefona al.
+- Türkçe / English.
+
+## Kurulum
+
+[Releases](https://github.com/burkiuze/ForgeMobile/releases) sayfasından `Forge-Mobile.apk` dosyasını indir ve kur (Android “bilinmeyen uygulamalara izin ver” isteyebilir). `Forge-Mobile.aab` Google Play’e yüklemek içindir.
+
+## Geliştirme
 
 ```bash
-# Install dependencies
 npm install
-
-# Run Vite development server
-npm run dev
+npm run dev        # tarayıcıda (masaüstü tarayıcı veya telefon)
+npm test           # çekirdek + ajan testleri
+npm run build      # dist/ → app/src/main/assets/www
 ```
 
-Visit `http://localhost:5173` in your browser. Open mobile responsive view (360px–430px) for the best touch experience.
+Android kabuğu (`app/`) bir WebView’dir; `window.ForgeNative` köprüsü CORS’suz HTTP, gizli anahtar deposu, dosya kaydetme ve sistem çubuğu renklerini sağlar. GitHub Actions (`.github/workflows/android.yml`) her `main` push’unda APK + AAB üretir.
 
----
+### İmzalı sürümler
 
-## Building the Android APK with Capacitor
+Repo ayarlarında (Settings › Secrets and variables › Actions) şu dört secret tanımlıysa CI imzalı `build-N` sürümü yayınlar ve uygulamalar kendini günceller:
 
-Forge Mobile is configured to be wrapped into an Android APK using Capacitor:
+| Secret | İçerik |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `forge-upload.jks` dosyasının base64 hali |
+| `ANDROID_STORE_PASSWORD` | keystore şifresi |
+| `ANDROID_KEY_PASSWORD` | anahtar şifresi |
+| `ANDROID_KEY_ALIAS` | `upload` |
 
-```bash
-# 1. Build the production web bundle
-npm run build
+Secret yoksa çıktılar imzasız olarak `unsigned-latest` ön sürümüne konur.
 
-# 2. Add Android native platform (first time only)
-npx cap add android
-
-# 3. Synchronize web assets into the Android native project
-npx cap sync android
-
-# 4. Open in Android Studio to build the debug/release APK
-npx cap open android
-```
-
-Alternatively, to build directly from the CLI:
-```bash
-cd android
-./gradlew assembleDebug
-```
-The APK will be generated at `android/app/build/outputs/apk/debug/app-debug.apk`.
-
----
-
-## Features
-- **First-Launch Setup Wizard**: Language picker (EN / TR), brand intro, `.env` file key importer, local model selector, and template project generator.
-- **Start Screen**: Project hub with recent projects, templates, and mock update alert.
-- **3D Scene Viewport**: Touch-optimized Orbit, Pan, Pinch, Raycast entity selection, Transform gizmos, and real-time Play/Stop physics simulation.
-- **Hierarchy & Inspector**: Full entity tree with parenting, duplicate/delete, and inspector for Transform, Mesh Renderer, Light, Camera, Collider, Rigidbody, Audio Source, Animator, and Scripting code editor.
-- **Asset Store & Sound Synthesizer**: CC0 3D models and textures + procedural 8-bit sound effect generator (Coin, Jump, Laser, Explosion, Hit, Powerup, Click, Blip) with real-time playback.
-- **Animation Timeline**: Keyframe timeline editor with scrub, loop, record position/rotation/scale/color keys.
-- **Antigravity AI Chat**: Minimal conversational interface with step-by-step thoughts, tool executions (`list_assets`, `inspect_asset`, `create_entity`, etc.), todo checklist, `@` entity mentions, `/slash` commands, and Manual approval cards.
-- **Model Library**: OpenRouter cloud models + catalog of 300+ local GGUF models with size, RAM, and "Fits your device" indicators.
-- **Secure Key Management**: Import `.env` files with zero leakage; keys are stored in secure storage, masked with only the last 4 characters displayed.
-
----
-*made by burkiuze*
+<p align="center"><sub>made by burkiuze</sub></p>

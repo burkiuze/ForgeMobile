@@ -67,6 +67,23 @@ jobs:
           name: forge-mobile-${{ github.run_number }}
           path: out/
 
+      - name: Publish unsigned build
+        if: env.HAS_KEY != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: unsigned-latest
+          name: Forge Mobile (unsigned CI build)
+          prerelease: true
+          make_latest: false
+          target_commitish: ${{ github.sha }}
+          body: |
+            Unsigned build ${{ github.run_number }} (${{ github.sha }}). Not installable as-is;
+            add the ANDROID_KEYSTORE_BASE64 / ANDROID_STORE_PASSWORD / ANDROID_KEY_PASSWORD /
+            ANDROID_KEY_ALIAS repository secrets to get signed releases.
+          files: |
+            out/Forge-Mobile-unsigned.apk
+            out/Forge-Mobile-unsigned.aab
+
       - name: Publish release
         if: env.HAS_KEY == 'true'
         uses: softprops/action-gh-release@v2
