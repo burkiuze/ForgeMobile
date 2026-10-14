@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "Forge Mobile",
+  "description": "AI-native 3D mobile game engine and editor companion",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

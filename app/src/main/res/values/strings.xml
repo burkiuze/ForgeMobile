@@ -1,3 +1,8 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">Forge</string>
+    <string name="default_web_client_id" translatable="false">213146772301-4fa2p1e1p3ckbar5u5vp3va6ujiej2rr.apps.googleusercontent.com</string>
+    <string name="sign_in_with_google">Google ile Giriş Yap / Sign in with Google</string>
+    <string name="sign_out">Çıkış Yap / Sign out</string>
+    <string name="welcome_to_forge">Forge Mobile\'a Hoş Geldiniz</string>
+    <string name="launch_editor">Forge Mobile Editor Başlat</string>
 </resources>

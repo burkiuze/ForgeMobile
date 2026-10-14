@@ -1,0 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #141414;
+  color: #EDE6D8;
+  font-family: 'Inter', system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F05A22;
+}
+
+/* Keyframe animations */
+@keyframes sparkPulse {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.25); filter: drop-shadow(0 0 6px #F2B233); }
+}
+
+.animate-spark {
+  animation: sparkPulse 2s ease-in-out infinite;
+}
+
+@keyframes thoughtShimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.thought-shimmer {
+  background: linear-gradient(90deg, rgba(240, 90, 34, 0.05) 0%, rgba(242, 178, 51, 0.18) 50%, rgba(240, 90, 34, 0.05) 100%);
+  background-size: 200% 100%;
+  animation: thoughtShimmer 2.5s infinite;
+}
