@@ -1,35 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- Glow aura -->
-    <path
-        android:fillColor="#33F05A22"
-        android:pathData="M54,54m-28,0a28,28 0 1,0 56,0a28,28 0 1,0 -56,0" />
-
-    <!-- Forge F Main Body -->
-    <path
-        android:fillColor="#F05A22"
-        android:pathData="M34,26 L74,26 C75.5,26 77,27.5 77,29 L77,39 C77,40.5 75.5,42 74,42 L48,42 L48,49 L68,49 C69.5,49 71,50.5 71,52 L71,62 C71,63.5 69.5,65 68,65 L48,65 L48,80 C48,81.5 46.5,83 45,83 L34,83 C32.5,83 31,81.5 31,80 L31,29 C31,27.5 32.5,26 34,26 Z" />
-
-    <!-- Bone White Interior Insets -->
-    <path
-        android:fillColor="#EDE6D8"
-        android:pathData="M40,32 L68,32 L68,36 L40,36 Z" />
-    <path
-        android:fillColor="#EDE6D8"
-        android:pathData="M40,55 L62,55 L62,59 L40,59 Z" />
-
-    <!-- Gold Sparks -->
-    <path
-        android:fillColor="#F2B233"
-        android:pathData="M80,28m-4,0a4,4 0 1,0 8,0a4,4 0 1,0 -8,0" />
-    <path
-        android:fillColor="#F2B233"
-        android:pathData="M72,55m-3,0a3,3 0 1,0 6,0a3,3 0 1,0 -6,0" />
-    <path
-        android:fillColor="#F2B233"
-        android:pathData="M84,46m-2.5,0a2.5,2.5 0 1,0 5,0a2.5,2.5 0 1,0 -5,0" />
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#F05A22" android:pathData="M25.20,36.08 L71.92,36.08 L68.08,44.40 L25.20,44.40 Z" />
+    <path android:fillColor="#EDE6D8" android:pathData="M25.20,52.08 L34.16,52.08 L34.16,78.96 L25.20,78.96 Z" />
+    <path android:fillColor="#EDE6D8" android:pathData="M38.00,52.08 L61.04,52.08 L56.88,61.04 L38.00,61.04 Z" />
+    <path android:fillColor="#F2B233" android:pathData="M77.04,28.40 L79.28,30.64 L77.04,32.88 L74.80,30.64 Z" />
+    <path android:fillColor="#F2B233" android:pathData="M81.84,36.40 L83.44,38.00 L81.84,39.60 L80.24,38.00 Z" />
+    <path android:fillColor="#F2B233" android:pathData="M75.12,41.52 L76.40,42.80 L75.12,44.08 L73.84,42.80 Z" />
 </vector>

@@ -16,3 +16,8 @@
 local.properties
 .env
 debug.keystore
+node_modules
+dist
+app/src/main/assets/www
+app/build
+*.jks

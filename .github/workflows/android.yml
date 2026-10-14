@@ -1,0 +1,84 @@
+name: android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      HAS_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build web app
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+          rm -rf app/src/main/assets/www
+          mkdir -p app/src/main/assets
+          cp -r dist app/src/main/assets/www
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.3.1"
+
+      - name: Release keystore
+        if: env.HAS_KEY == 'true'
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          echo "STORE_PASSWORD=${{ secrets.ANDROID_STORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "KEY_ALIAS=${{ secrets.ANDROID_KEY_ALIAS || 'upload' }}" >> "$GITHUB_ENV"
+
+      - name: Build APK + AAB
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          gradle --no-daemon :app:assembleRelease :app:bundleRelease -PforgeVersionCode=${{ github.run_number }} --stacktrace
+
+      - name: Collect outputs
+        run: |
+          mkdir -p out
+          suffix=""; [ "$HAS_KEY" = "true" ] || suffix="-unsigned"
+          cp app/build/outputs/apk/release/*.apk "out/Forge-Mobile${suffix}.apk"
+          cp app/build/outputs/bundle/release/*.aab "out/Forge-Mobile${suffix}.aab"
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: forge-mobile-${{ github.run_number }}
+          path: out/
+
+      - name: Publish release
+        if: env.HAS_KEY == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Forge Mobile build ${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Forge Mobile 1.0.${{ github.run_number }} (${{ github.sha }})
+
+            - Forge-Mobile.apk: install on Android (allow "install unknown apps")
+            - Forge-Mobile.aab: Google Play upload bundle
+          files: |
+            out/Forge-Mobile.apk
+            out/Forge-Mobile.aab

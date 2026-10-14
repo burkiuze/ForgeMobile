@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar" />
+    <style name="Theme.Forge" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/forge_bg</item>
+        <item name="android:statusBarColor">@color/forge_bg</item>
+        <item name="android:navigationBarColor">@color/forge_bg</item>
+        <item name="android:colorAccent">@color/forge_orange</item>
+    </style>
 </resources>
