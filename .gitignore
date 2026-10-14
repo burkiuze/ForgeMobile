@@ -21,3 +21,4 @@ dist
 app/src/main/assets/www
 app/build
 *.jks
+dist-release
